@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS resto.process (
     "id"                TEXT PRIMARY KEY,
 
     -- Process status as HTTP Status
-    status              INT,
+    status              INT DEFAULT 202,
 
     -- Process title
     title                TEXT,
