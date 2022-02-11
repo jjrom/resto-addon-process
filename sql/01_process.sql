@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS resto.process (
 --
 -- Indexes
 --
-CREATE INDEX IF NOT EXISTS idx_status_process ON resto.process;
+CREATE INDEX IF NOT EXISTS idx_status_process ON resto.process (status);
 
 
 
