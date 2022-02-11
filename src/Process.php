@@ -84,7 +84,7 @@ class Process extends RestoAddOn
      *      }
      *  )
      *
-     * @param string $userid
+     * @param array $params
      * @param array $body
      */
     public function addProcess($params, $body)
@@ -149,6 +149,8 @@ class Process extends RestoAddOn
      *          @OA\JsonContent(ref="#/components/schemas/NotFoundError")
      *      )
      *  )
+     *  
+     *  @param array $params
      */
     public function getProcess($params)
     {
