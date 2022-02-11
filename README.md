@@ -1,2 +1,2 @@
 # resto-addon-process
-Process handling add-on fro resto
+Process managament plugin for resto
