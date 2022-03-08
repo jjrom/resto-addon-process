@@ -96,16 +96,23 @@ class Process extends RestoAddOn
         }
 
         try {
+
+            $input = isset($body['input']) ? json_encode($body['input'], JSON_UNESCAPED_SLASHES) : null;
+
             $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('INSERT INTO ' . $this->context->dbDriver->schema . '.process (id, userid, created, title, description, input) VALUES ($1,$2, now(),$3,$4,$5) ON CONFLICT (id) DO NOTHING RETURNING id', array(
                 $body['id'],
                 $this->user->profile['id'],
                 $body['title'] ?? null,
                 $body['description'] ?? null,
-                isset($body['input']) ? json_encode($body['input'], JSON_UNESCAPED_SLASHES) : null
+                $input
             )));
             if (count($results) !== 1) {
                 throw new Exception(409, 'Process already exist ' . $body['id']);
             }
+
+            // Launch process
+            $this->triggerProcess($input);
+
         } catch (Exception $e) {
             return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
         }
@@ -187,6 +194,20 @@ class Process extends RestoAddOn
         }
 
         return $process;
+    }
+
+    /**
+     * Trigger a process
+     * 
+     * @param array $input
+     */
+    private function triggerProcess($input) 
+    {
+
+        if ( !isset($input) || !isset($input['endPoint ']) ) {
+            // Nothing
+        }
+
     }
 
 }
