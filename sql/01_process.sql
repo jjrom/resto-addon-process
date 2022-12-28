@@ -2,7 +2,7 @@
 --
 -- Entities
 --
-CREATE TABLE IF NOT EXISTS resto.process (
+CREATE TABLE IF NOT EXISTS __DATABASE_COMMON_SCHEMA__.process (
 
     -- Unique identifier provided during creation
     "id"                TEXT PRIMARY KEY,
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS resto.process (
 --
 -- Indexes
 --
-CREATE INDEX IF NOT EXISTS idx_status_process ON resto.process (status);
+CREATE INDEX IF NOT EXISTS idx_status_process ON __DATABASE_COMMON_SCHEMA__.process (status);
 
 
 

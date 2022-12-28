@@ -15,7 +15,7 @@ class Process extends RestoAddOn
     /**
      * Add-on version
      */
-    public $version = '1.0.0';
+    public $version = '1.1.0';
 
     /**
      * Constructor
@@ -99,7 +99,7 @@ class Process extends RestoAddOn
 
             $input = isset($body['input']) ? json_encode($body['input'], JSON_UNESCAPED_SLASHES) : null;
 
-            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('INSERT INTO ' . $this->context->dbDriver->schema . '.process (id, userid, created, title, description, input) VALUES ($1,$2, now(),$3,$4,$5) ON CONFLICT (id) DO NOTHING RETURNING id', array(
+            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('INSERT INTO ' . $this->context->dbDriver->commonSchema . '.process (id, userid, created, title, description, input) VALUES ($1,$2, now(),$3,$4,$5) ON CONFLICT (id) DO NOTHING RETURNING id', array(
                 $body['id'],
                 $this->user->profile['id'],
                 $body['title'] ?? null,
@@ -162,7 +162,7 @@ class Process extends RestoAddOn
     public function getProcess($params)
     {
         
-        $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('SELECT id, status, title, description, userid as owner, to_iso8601(created) as created, to_iso8601(finished) as finished, input, output FROM ' . $this->context->dbDriver->schema . '.process WHERE id=($1)', array(
+        $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('SELECT id, status, title, description, userid as owner, to_iso8601(created) as created, to_iso8601(finished) as finished, input, output FROM ' . $this->context->dbDriver->commonSchema . '.process WHERE id=($1)', array(
             $params['processId']
         )));
 
