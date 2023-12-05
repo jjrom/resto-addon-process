@@ -7,18 +7,12 @@ CREATE TABLE IF NOT EXISTS __DATABASE_COMMON_SCHEMA__.process (
     "id"                    TEXT PRIMARY KEY,
     -- Owner reference resto.user
     userid                  BIGINT,
-    title                   TEXT
+    title                   TEXT,
     description             TEXT,
     version                 TEXT,
     keywords                TEXT[],
-    metadata                JSON,
     created                 TIMESTAMP,
-    jobControlOptions       TEXT[],
-    outputTransmission      TEXT[],
-    additionalParameters    JSON,
-    links                   JSON,    
-    inputs                  JSON,
-    outputs                 JSON
+    content                 JSON        -- Every properties from OGC API Processes process object
 );
 
 --
@@ -26,31 +20,26 @@ CREATE TABLE IF NOT EXISTS __DATABASE_COMMON_SCHEMA__.process (
 --
 CREATE TABLE IF NOT EXISTS __DATABASE_COMMON_SCHEMA__.job (
     -- Unique identifier provided during creation
-    "id"                TEXT PRIMARY KEY,
+    "id"                    TEXT PRIMARY KEY,
     -- Owner reference resto.user
-    userid              BIGINT,
+    userid                  BIGINT,
     -- Reference process id
-    process_id          TEXT,
-    type                TEXT default 'process',
-    status              INT DEFAULT 202,
-    message             TEXT,
-    created             TIMESTAMP,
-    started             TIMESTAMP,
-    finished            TIMESTAMP,
-    updated             TIMESTAMP,
-    progress            INTEGER,
-    response            TEXT default 'raw',
-    subscriber          JSON,
-    links               JSON,    
-    inputs              JSON,
-    outputs             JSON
-
+    process_id              TEXT REFERENCES __DATABASE_COMMON_SCHEMA__.process (id) ON DELETE CASCADE,
+    type                    TEXT default 'process',
+    status                  INT DEFAULT 202,
+    message                 TEXT,
+    created                 TIMESTAMP,
+    started                 TIMESTAMP,
+    finished                TIMESTAMP,
+    updated                 TIMESTAMP,
+    progress                INTEGER,
+    content                 JSON         -- Every properties from OGC API Processes job object
 );
 
 --
 -- Indexes
 --
 CREATE INDEX IF NOT EXISTS idx_status_job ON __DATABASE_COMMON_SCHEMA__.job (status);
-
+CREATE INDEX IF NOT EXISTS idx_userid_job ON __DATABASE_COMMON_SCHEMA__.job (userid);
 
 
