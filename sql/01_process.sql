@@ -26,14 +26,13 @@ CREATE TABLE IF NOT EXISTS __DATABASE_COMMON_SCHEMA__.job (
     -- Reference process id
     process_id              TEXT REFERENCES __DATABASE_COMMON_SCHEMA__.process (id) ON DELETE CASCADE,
     type                    TEXT default 'process',
-    status                  INT DEFAULT 202,
+    status                  TEXT,
     message                 TEXT,
     created                 TIMESTAMP,
     started                 TIMESTAMP,
     finished                TIMESTAMP,
     updated                 TIMESTAMP,
-    progress                INTEGER,
-    links                   JSON
+    progress                INTEGER
 );
 
 --

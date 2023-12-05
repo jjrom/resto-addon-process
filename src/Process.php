@@ -120,6 +120,61 @@
  *      )
  *  )
  * 
+ *
+ *  @OA\Schema(
+ *      schema="Job",
+ *      required={"jobID", "status", "type"},
+ *      @OA\Property(
+ *          property="jobID",
+ *          type="string"
+ *      ),
+ *      @OA\Property(
+ *          property="processID",
+ *          type="string"
+ *      ),
+ *      @OA\Property(
+ *          property="type",
+ *          type="string",
+ *          enum={"process"}
+ *      ),
+ *      @OA\Property(
+ *          property="status",
+ *          type="string",
+ *          enum={"accepted", "running", "successful", "failed", "dismissed"}
+ *      ),
+ *      @OA\Property(
+ *          property="message",
+ *          type="string"
+ *      ),
+ *      @OA\Property(
+ *          property="created",
+ *          type="string"
+ *      ),
+ *      @OA\Property(
+ *          property="started",
+ *          type="string"
+ *      ),
+ *      @OA\Property(
+ *          property="finished",
+ *          type="string"
+ *      ),
+ *      @OA\Property(
+ *          property="updated",
+ *          type="string"
+ *      ),
+ *      @OA\Property(
+ *          property="progress",
+ *          type="integer",
+ *          minimum=0,
+ *          maximum=100
+ *      ),
+ *      @OA\Property(
+ *          property="links",
+ *          type="array",
+ *          @OA\Items(ref="#/components/schemas/Link")
+ *      )
+ *  )
+ * 
  *   
  * Process management add-on
  */
@@ -137,6 +192,8 @@ class Process extends RestoAddOn
     private $apiVersion = '1.0.0';
 
     private $landingRoot = '/oapi-p';
+
+    private $jobColumns = 'id, userid as owner, process_id, type, status, message, to_iso8601(created) as created, to_iso8601(started) as started, to_iso8601(finished) as finished, to_iso8601(updated) as updated, progress';
 
     /**
      * Constructor
@@ -464,7 +521,18 @@ class Process extends RestoAddOn
 
         return array(
             'processes' => $processes,
-            'links' => array()
+            'links' => array(
+                array(
+                    'rel' => 'up',
+                    'type' => RestoUtil::$contentTypes['json'],
+                    'href' => $this->context->core['baseUrl'] . $this->landingRoot
+                ),
+                array(
+                    'rel' => 'self',
+                    'type' => RestoUtil::$contentTypes['json'],
+                    'href' => $this->context->core['baseUrl'] . $this->landingRoot . '/processes'
+                )
+            )
         );
 
     }
@@ -559,7 +627,7 @@ class Process extends RestoAddOn
 
         try {
 
-            $results = $this->context->dbDriver->query('SELECT id, userid as owner, process_id, type, status, message, to_iso8601(created) as created, to_iso8601(started) as started, to_iso8601(finished) as finished, to_iso8601(updated) as updated, progress, links FROM ' . $this->context->dbDriver->commonSchema . '.job');
+            $results = $this->context->dbDriver->query('SELECT ' . $this->jobColumns . ' FROM ' . $this->context->dbDriver->commonSchema . '.job');
             
             while ($job = pg_fetch_assoc($results)) {
                 $jobs[] = $this->internalToJob($job, false);
@@ -571,7 +639,18 @@ class Process extends RestoAddOn
 
         return array(
             'jobs' => $jobs,
-            'links' => array()
+            'links' => array(
+                array(
+                    'rel' => 'up',
+                    'type' => RestoUtil::$contentTypes['json'],
+                    'href' => $this->context->core['baseUrl'] . $this->landingRoot
+                ),
+                array(
+                    'rel' => 'self',
+                    'type' => RestoUtil::$contentTypes['json'],
+                    'href' => $this->context->core['baseUrl'] . $this->landingRoot . '/jobs'
+                )
+            )
         );
 
     }
@@ -617,7 +696,7 @@ class Process extends RestoAddOn
 
         try {
 
-            $results = $this->context->dbDriver->pQuery('SELECT id, userid as owner, process_id, type, status, message, to_iso8601(created) as created, to_iso8601(started) as started, to_iso8601(finished) as finished, to_iso8601(updated) as updated, progress, links FROM ' . $this->context->dbDriver->commonSchema . '.job WHERE id=($1)', array(
+            $results = $this->context->dbDriver->pQuery('SELECT ' . $this->jobColumns . ' FROM ' . $this->context->dbDriver->commonSchema . '.job WHERE id=($1)', array(
                 $params['jobId']
             ));
     
@@ -633,13 +712,91 @@ class Process extends RestoAddOn
 
     }
 
-
+    /**
+     * [IMPORTANT] job is not deleted from database but its status is set as "dismissed"
+     * 
+     *  @OA\Delete(
+     *      path="/jobs/{jobId}",
+     *      summary="Delete a job",
+     *      description="Delete/cancel a job",
+     *      tags={"process"},
+     *      @OA\Parameter(
+     *         name="jobId",
+     *         in="path",
+     *         required=true,
+     *         description="job's identifier",
+     *         @OA\Schema(
+     *             type="string"
+     *         )
+     *      ),
+     *      @OA\Response(
+     *          response="200",
+     *          description="job",
+     *          @OA\JsonContent(
+     *              ref="#/components/schemas/Job"
+     *          )
+     *      ),
+     *      @OA\Response(
+     *          response="400",
+     *          description="Invalid *jobId*",
+     *          @OA\JsonContent(ref="#/components/schemas/BadRequestError")
+     *      ),
+     *      @OA\Response(
+     *          response="404",
+     *          description="Not Found",
+     *          @OA\JsonContent(ref="#/components/schemas/NotFoundError")
+     *      ),
+     *      @OA\Response(
+     *          response="410",
+     *          description="Gone",
+     *          @OA\JsonContent(ref="#/components/schemas/GoneError")
+     *      )
+     *  )
+     *  
+     *  @param array $params
+     */
     public function deleteJob($params)
     {
+
+        $job = $this->getJob($params['jobId']);
+        
+        // Only the owner of the job or the admin can delete it
+        if ( $job['owner'] !== $this->user->profile['id']) {
+            if (! $this->user->hasGroup(RestoConstants::GROUP_ADMIN_ID)) {
+                return RestoLogUtil::httpError(403);
+            }
+        }
+
+        // The job is already dismissed
+        if ($job['status'] === 'dismissed') {
+            return RestoLogUtil::httpError(410);
+        }
+
+        try {
+
+            $results = $this->context->dbDriver->pQuery('UPDATE ' . $this->context->dbDriver->commonSchema . '.job SET status=$2, updated=now(), finished=now() WHERE id=($1) RETURNING ' . $this->jobColumns, array(
+                $params['jobId'],
+                'dismissed'
+            ));
+
+            if ( !isset($results) || count($results) !== 1 ) {
+                return RestoLogUtil::httpError(410);
+            }
+            
+        } catch (Exception $e) {
+            return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
+        }
+
+        return $this->internalToJob($results[0], true);
 
     }
 
     public function executeProcess($params, $body)
+    {
+
+    }
+
+    public function getResults($params)
     {
 
     }
@@ -663,13 +820,26 @@ class Process extends RestoAddOn
 
         $content = json_decode($internalProcess['content'], true);
         foreach ($content as $key => $value) {
-            if ( !$fullDescription && in_array($key, array('inputs', 'outputs')) ) {
+            if ( !$fullDescription && in_array($key, array('inputs', 'outputs', 'links')) ) {
                 continue;
             }
-            $process[$key] = $key === 'links' ? $this->setProcessLinks($process['id'], $value) : $value;
+            $process[$key] = $value;
         }
 
+        // Links
+        $process['links'] = array_merge(
+            $content['links'] ?? array(),
+            array(
+                array(
+                    'rel' => 'http://www.opengis.net/def/rel/ogc/1.0/execute',
+                    'type' => RestoUtil::$contentTypes['json'],
+                    'href' => $this->context->core['baseUrl'] . $this->landingRoot . '/processes/' . $process['id'] . '/execution'
+                )
+            )       
+        );
+
         return $process;
+
     }
 
     /**
@@ -719,19 +889,42 @@ class Process extends RestoAddOn
     private function internalToJob($internalJob)
     {
 
+        $links = array(
+            array(
+                'rel' => 'status',
+                'type' => RestoUtil::$contentTypes['json'],
+                'href' => $this->context->core['baseUrl'] . $this->landingRoot . '/jobs/' . $internalJob['id'] . '/execution'
+            )
+        );
+
+        // Status are "accepted", "running", "successful", "failed", "dismissed"
+        switch($internalJob['status']) {
+
+            case 'failed':
+            case 'successful':
+                $links = array_merge($links, array(
+                    array(
+                        'rel' => $internalJob['status'] === 'successful' ? 'http://www.opengis.net/def/rel/ogc/1.0/results' : 'http://www.opengis.net/def/rel/ogc/1.0/exceptions',
+                        'type' => RestoUtil::$contentTypes['json'],
+                        'href' => $this->context->core['baseUrl'] . $this->landingRoot . '/jobs/' . $internalJob['id'] . '/results'        
+                    )
+                ));
+                break;
+        }
+
         return array(
             'jobID' => $internalJob['id'],
             'processId' => $internalJob['process_id'],
             'owner' => $internalJob['owner'],
             'type' => $internalJob['type'],
-            'status' => (integer) $internalJob['status'],
+            'status' => $internalJob['status'],
             'message' => $internalJob['message'],
             'created' => $internalJob['created'],
             'started' => $internalJob['started'],
             'finished' => $internalJob['finished'],
             'updated' => $internalJob['updated'],
             'progress' => (integer) $internalJob['progress'],
-            'links' => $this->setJobLinks($internalJob['id'], json_decode($internalJob['links'], true))
+            'links' =>$links
         );
 
     }
@@ -769,30 +962,6 @@ class Process extends RestoAddOn
         }
 
         return $cleanLinks;
-    }
-
-    /**
-     * Compute process links
-     * 
-     * @param string $processId
-     * @param array $links
-     * @return array
-     */
-    private function setProcessLinks($processId, $links)
-    {
-        return $links;
-    }
-
-    /**
-     * Compute job links
-     * 
-     * @param string $jobId
-     * @param array $links
-     * @return array
-     */
-    private function setJobLinks($jobId, $links)
-    {
-        return $links;
     }
 
 }
