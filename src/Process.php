@@ -6,8 +6,8 @@
  * file 'LICENSE.txt', which is part of this source code package.
  */
 
-/** 
- * 
+/**
+ *
  *  @OA\Schema(
  *      schema="Process",
  *      required={"id", "version"},
@@ -119,7 +119,7 @@
  *          @OA\JsonContent()
  *      )
  *  )
- * 
+ *
  *
  *  @OA\Schema(
  *      schema="Job",
@@ -174,13 +174,12 @@
  *          @OA\Items(ref="#/components/schemas/Link")
  *      )
  *  )
- * 
- *   
+ *
+ *
  * Process management add-on
  */
 class Process extends RestoAddOn
 {
-
     /**
      * Add-on version
      */
@@ -191,9 +190,15 @@ class Process extends RestoAddOn
      */
     private $apiVersion = '1.0.0';
 
+    /* 
+     * The root path for this API endpoint
+     */
     private $landingRoot = '/oapi-p';
 
-    private $jobColumns = 'id, userid as owner, process_id, type, status, message, to_iso8601(created) as created, to_iso8601(started) as started, to_iso8601(finished) as finished, to_iso8601(updated) as updated, progress';
+    /*
+     * List of job columns to retrieve in the SQL query
+     */
+    private $jobColumns = 'id, userid as owner, process_id, type, status, message, to_iso8601(created) as created, to_iso8601(started) as started, to_iso8601(finished) as finished, to_iso8601(updated) as updated, progress, body';
 
     /**
      * Constructor
@@ -245,7 +250,7 @@ class Process extends RestoAddOn
      *    )
      */
     public function hello()
-    {   
+    {
         return array(
             'title' => 'OGC API Processes server',
             'description' => 'OGC API Processes server provided by resto engine (https://github.com/jjrom/resto)',
@@ -368,7 +373,7 @@ class Process extends RestoAddOn
             $this->context->outputFormat = 'openapi+json';
             return json_decode($content, true);
         }
-        
+
         /*
          * Set range and headers
          */
@@ -430,9 +435,9 @@ class Process extends RestoAddOn
      *          {"basicAuth":{}, "bearerAuth":{}, "queryAuth":{}}
      *      }
      *  )
-     * 
-     *  SQL table 
-     *  
+     *
+     *  SQL table
+     *
      *      "id"                    TEXT PRIMARY KEY,
      *      userid                  BIGINT,
      *      title                   TEXT
@@ -440,7 +445,7 @@ class Process extends RestoAddOn
      *      version                 TEXT,
      *      keywords                TEXT[],
      *      created                 TIMESTAMP,
-     *      content                 JSON        
+     *      content                 JSON
      *
      * @param array $params
      * @param array $body
@@ -448,11 +453,19 @@ class Process extends RestoAddOn
     public function addProcess($params, $body)
     {
 
+        // Only admin can post process
+        if ( !$this->user->hasGroup(RestoConstants::GROUP_ADMIN_ID) ) {
+            return RestoLogUtil::httpError(403);
+        }
+
         $internalProcess = $this->processToInternal($body);
+        if ($this->processExists($internalProcess['id'])) {
+            RestoLogUtil::httpError(409, 'Process ' . $internalProcess['id'] . ' already exist');
+        }
 
         try {
 
-            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('INSERT INTO ' . $this->context->dbDriver->commonSchema . '.process (id, userid, title, description, version, keywords, content, created) VALUES ($1,$2, $3, $4, $5, $6, $7, now()) ON CONFLICT (id) DO NOTHING RETURNING id', array(
+            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('INSERT INTO ' . $this->context->dbDriver->commonSchema . '.process (id, userid, title, description, version, keywords, content, created) VALUES ($1, $2, $3, $4, $5, $6, $7, now()) ON CONFLICT (id) DO NOTHING RETURNING id', array(
                 $internalProcess['id'],
                 $this->user->profile['id'],
                 $internalProcess['title'],
@@ -461,8 +474,9 @@ class Process extends RestoAddOn
                 isset($internalProcess['keywords']) ? '{' . join(',', $internalProcess['keywords']) . '}' : null,
                 json_encode($internalProcess['content'], JSON_UNESCAPED_SLASHES)
             )));
+
             if (count($results) !== 1) {
-                throw new Exception(409, 'Process already exist ' . $internalProcess['id']);
+                throw new Exception(500, 'Cannot create process ' . $internalProcess['id']);
             }
 
         } catch (Exception $e) {
@@ -499,22 +513,22 @@ class Process extends RestoAddOn
      *          @OA\JsonContent(ref="#/components/schemas/NotFoundError")
      *      )
      *  )
-     *  
+     *
      *  @param array $params
      */
     public function getProcesses($params)
     {
-        
+
         $processes = array();
 
         try {
 
             $results = $this->context->dbDriver->query('SELECT id, userid as owner, title, description, version, keywords, to_iso8601(created) as created, content FROM ' . $this->context->dbDriver->commonSchema . '.process');
-            
+
             while ($process = pg_fetch_assoc($results)) {
                 $processes[] = $this->internalToProcess($process, false);
             }
-        
+
         } catch (Exception $e) {
             return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
         }
@@ -569,22 +583,22 @@ class Process extends RestoAddOn
      *          @OA\JsonContent(ref="#/components/schemas/NotFoundError")
      *      )
      *  )
-     *  
+     *
      *  @param array $params
      */
     public function getProcess($params)
     {
-        
+
         try {
 
             $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('SELECT id, userid as owner, title, description, version, keywords, to_iso8601(created) as created, content FROM ' . $this->context->dbDriver->commonSchema . '.process WHERE id=($1)', array(
                 $params['processId']
             )));
-    
-            if ( !isset($results) || count($results) !== 1 ) {
+
+            if (!isset($results) || count($results) !== 1) {
                 return RestoLogUtil::httpError(404);
             }
-            
+
         } catch (Exception $e) {
             return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
         }
@@ -617,22 +631,22 @@ class Process extends RestoAddOn
      *          @OA\JsonContent(ref="#/components/schemas/NotFoundError")
      *      )
      *  )
-     *  
+     *
      *  @param array $params
      */
     public function getJobs($params)
     {
-        
+
         $jobs = array();
 
         try {
 
             $results = $this->context->dbDriver->query('SELECT ' . $this->jobColumns . ' FROM ' . $this->context->dbDriver->commonSchema . '.job');
-            
+
             while ($job = pg_fetch_assoc($results)) {
                 $jobs[] = $this->internalToJob($job, false);
             }
-        
+
         } catch (Exception $e) {
             return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
         }
@@ -688,7 +702,7 @@ class Process extends RestoAddOn
      *          @OA\JsonContent(ref="#/components/schemas/NotFoundError")
      *      )
      *  )
-     *  
+     *
      *  @param array $params
      */
     public function getJob($params)
@@ -699,22 +713,22 @@ class Process extends RestoAddOn
             $results = $this->context->dbDriver->pQuery('SELECT ' . $this->jobColumns . ' FROM ' . $this->context->dbDriver->commonSchema . '.job WHERE id=($1)', array(
                 $params['jobId']
             ));
-    
-            if ( !isset($results) || count($results) !== 1 ) {
+
+            if (!isset($results) || count($results) !== 1) {
                 return RestoLogUtil::httpError(404);
             }
-            
+
         } catch (Exception $e) {
             return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
         }
 
-        return $this->internalToJob($results[0], true);
+        return $this->internalToJob($results[0], false);
 
     }
 
     /**
      * [IMPORTANT] job is not deleted from database but its status is set as "dismissed"
-     * 
+     *
      *  @OA\Delete(
      *      path="/jobs/{jobId}",
      *      summary="Delete a job",
@@ -752,17 +766,17 @@ class Process extends RestoAddOn
      *          @OA\JsonContent(ref="#/components/schemas/GoneError")
      *      )
      *  )
-     *  
+     *
      *  @param array $params
      */
     public function deleteJob($params)
     {
 
         $job = $this->getJob($params['jobId']);
-        
+
         // Only the owner of the job or the admin can delete it
-        if ( $job['owner'] !== $this->user->profile['id']) {
-            if (! $this->user->hasGroup(RestoConstants::GROUP_ADMIN_ID)) {
+        if ($job['owner'] !== $this->user->profile['id']) {
+            if (!$this->user->hasGroup(RestoConstants::GROUP_ADMIN_ID)) {
                 return RestoLogUtil::httpError(403);
             }
         }
@@ -779,25 +793,111 @@ class Process extends RestoAddOn
                 'dismissed'
             ));
 
-            if ( !isset($results) || count($results) !== 1 ) {
+            if (!isset($results) || count($results) !== 1) {
                 return RestoLogUtil::httpError(410);
             }
-            
+
         } catch (Exception $e) {
             return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
         }
 
-        return $this->internalToJob($results[0], true);
+        return $this->internalToJob($results[0], false);
 
     }
 
+    /**
+     *  @OA\Post(
+     *      path="/processes/{processId}/execution",
+     *      summary="Execute a process",
+     *      description="Execute a process leading to a job",
+     *      tags={"process"},
+     *      @OA\Response(
+     *          response="200",
+     *          description="Job status",
+     *          @OA\JsonContent(ref="#/components/schemas/GoneError")
+     *      ),
+     *      @OA\Response(
+     *          response="403",
+     *          description="Forbidden",
+     *          @OA\JsonContent(ref="#/components/schemas/ForbiddenError")
+     *      ),
+     *      @OA\RequestBody(
+     *          description="Process execution parameters",
+     *          required=true,
+     *          @OA\JsonContent(
+     *              @OA\Property(
+     *                  property="inputs",
+     *                  type="object",
+     *                  @OA\JsonContent()
+     *              ),
+     *              @OA\Property(
+     *                  property="outputs",
+     *                  type="object",
+     *                  @OA\JsonContent()
+     *              ),
+     *              @OA\Property(
+     *                  property="response",
+     *                  type="string",
+     *                  enum={"raw", "document"}
+     *              )
+     *          )
+     *      ),
+     *      security={
+     *          {"basicAuth":{}, "bearerAuth":{}, "queryAuth":{}}
+     *      }
+     *  )
+     * 
+     * job TABLE
+     * 
+     *      "id"                    TEXT PRIMARY KEY,
+     *      userid                  BIGINT,
+     *      process_id              TEXT REFERENCES __DATABASE_COMMON_SCHEMA__.process (id) ON DELETE CASCADE,
+     *      type                    TEXT default 'process',
+     *      status                  TEXT,
+     *      message                 TEXT,
+     *      created                 TIMESTAMP,
+     *      started                 TIMESTAMP,
+     *      finished                TIMESTAMP,
+     *      updated                 TIMESTAMP,
+     *      progress                INTEGER
+     * 
+     * @param array $params
+     * @param array $body
+     */
     public function executeProcess($params, $body)
     {
+
+        // Check that process exists
+        $this->getProcess(array(
+            'processId' => $params['processId']
+        ));
+        
+        try {
+            
+            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('INSERT INTO ' . $this->context->dbDriver->commonSchema . '.job (id, userid, process_id, status, created, started, updated, progress, body) VALUES ($1, $2, $3, $4, now(), now(), now(), $5, $6) RETURNING ' . $this->jobColumns, array(
+                RestoUtil::toUUID(md5(microtime() . rand())),
+                $this->user->profile['id'],
+                $params['processId'],
+                'accepted',
+                0,
+                json_encode($body, JSON_UNESCAPED_SLASHES)
+            )));
+
+            if (count($results) !== 1) {
+                throw new Exception(500, 'Cannot execute process ' . $params['processId']);
+            }
+
+        } catch (Exception $e) {
+            return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
+        }
+
+        return $this->internalToJob($results[0], false);
 
     }
 
     public function getResults($params)
     {
+
 
     }
 
@@ -809,7 +909,7 @@ class Process extends RestoAddOn
      */
     private function internalToProcess($internalProcess, $fullDescription)
     {
-        
+
         $process = array(
             'id' => $internalProcess['id'],
             'version' => $internalProcess['version'],
@@ -820,7 +920,7 @@ class Process extends RestoAddOn
 
         $content = json_decode($internalProcess['content'], true);
         foreach ($content as $key => $value) {
-            if ( !$fullDescription && in_array($key, array('inputs', 'outputs', 'links')) ) {
+            if (!$fullDescription && in_array($key, array('inputs', 'outputs', 'links'))) {
                 continue;
             }
             $process[$key] = $value;
@@ -835,7 +935,7 @@ class Process extends RestoAddOn
                     'type' => RestoUtil::$contentTypes['json'],
                     'href' => $this->context->core['baseUrl'] . $this->landingRoot . '/processes/' . $process['id'] . '/execution'
                 )
-            )       
+            )
         );
 
         return $process;
@@ -853,13 +953,13 @@ class Process extends RestoAddOn
         /*
          * Check that inputProcess is a valid array
          */
-        if (!is_array($inputProcess)) {
+        if ( !is_array($inputProcess) || !is_array($inputProcess['inputs']) || !is_array($inputProcess['outputs']) ) {
             RestoLogUtil::httpError(400, 'Invalid input JSON process');
         }
 
         $internalProcess = array(
             // Be permissive here, we create an UUID process id if not set in the inputProcess
-            'id' => $inputProcess['id'] ?? RestoUtil::toUUID(md5(microtime().rand())),
+            'id' => $inputProcess['id'] ?? RestoUtil::toUUID(md5(microtime() . rand())),
             'version' => $inputProcess['version'] ?? $this->apiVersion,
             'title' => $inputProcess['title'] ?? null,
             'description' => $inputProcess['description'] ?? null,
@@ -871,7 +971,7 @@ class Process extends RestoAddOn
          * Set content values
          */
         foreach (array_values(array('metadata', 'additionalParameters', 'jobControlOptions', 'outputTransmission', 'links', 'inputs', 'outputs')) as $key) {
-            if ( isset($inputProcess[$key]) ) {
+            if (isset($inputProcess[$key])) {
                 $internalProcess['content'][$key] = $key === 'links' ? $this->cleanInputLinks($inputProcess['links']) : $inputProcess[$key];
             }
         }
@@ -883,10 +983,10 @@ class Process extends RestoAddOn
      * Convert raw job from database to an OGC API Job
      *
      * @param array $internalJob
-     * @param boolean $fullDescription
-     * 
+     * @param boolean $showBody -- Set to true only internally to get the inputs/outputs info
+     *
      */
-    private function internalToJob($internalJob)
+    private function internalToJob($internalJob, $showBody)
     {
 
         $links = array(
@@ -906,13 +1006,13 @@ class Process extends RestoAddOn
                     array(
                         'rel' => $internalJob['status'] === 'successful' ? 'http://www.opengis.net/def/rel/ogc/1.0/results' : 'http://www.opengis.net/def/rel/ogc/1.0/exceptions',
                         'type' => RestoUtil::$contentTypes['json'],
-                        'href' => $this->context->core['baseUrl'] . $this->landingRoot . '/jobs/' . $internalJob['id'] . '/results'        
+                        'href' => $this->context->core['baseUrl'] . $this->landingRoot . '/jobs/' . $internalJob['id'] . '/results'
                     )
                 ));
                 break;
         }
 
-        return array(
+        $job = array(
             'jobID' => $internalJob['id'],
             'processId' => $internalJob['process_id'],
             'owner' => $internalJob['owner'],
@@ -923,19 +1023,25 @@ class Process extends RestoAddOn
             'started' => $internalJob['started'],
             'finished' => $internalJob['finished'],
             'updated' => $internalJob['updated'],
-            'progress' => (integer) $internalJob['progress'],
-            'links' =>$links
+            'progress' => (int) $internalJob['progress'],
+            'links' => $links
         );
+
+        if ($showBody) {
+            $job['body'] = json_decode($internalJob['body'], true);
+        }
+
+        return $job;
 
     }
 
     /**
      * Remove input links that are handled by resto
-     * 
+     *
      * List of possible links from specification are defined here https://docs.ogc.org/is/18-062r2/18-062r2.html#toc16
-     * 
+     *
      * [IMPORTANT] Note that the "up" relation is equivalent to the "parent" relation in STAC
-     * 
+     *
      * @param array $links
      * @return array
      */
@@ -963,5 +1069,19 @@ class Process extends RestoAddOn
 
         return $cleanLinks;
     }
+
+    /**
+     * Check if process exists within  database
+     *
+     * @param string $processId
+     * @return boolean
+     * @throws Exception
+     */
+    private function processExists($processId)
+    {
+        $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('SELECT id FROM ' . $this->context->dbDriver->commonSchema . '.process WHERE id=$1', array($processId)));
+        return !empty($results);
+    }
+
 
 }

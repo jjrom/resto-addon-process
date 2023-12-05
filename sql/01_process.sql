@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS __DATABASE_COMMON_SCHEMA__.job (
     started                 TIMESTAMP,
     finished                TIMESTAMP,
     updated                 TIMESTAMP,
-    progress                INTEGER
+    progress                INTEGER,
+    body                    JSON -- This is what is post for process execution i.e. inputs and outputs
 );
 
 --
