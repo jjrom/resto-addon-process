@@ -555,6 +555,25 @@ class Process extends RestoAddOn
     public function getJobs($params)
     {
         
+        $jobs = array();
+
+        try {
+
+            $results = $this->context->dbDriver->query('SELECT id, userid as owner, process_id, type, status, message, to_iso8601(created) as created, to_iso8601(started) as started, to_iso8601(finished) as finished, to_iso8601(updated) as updated, progress, links FROM ' . $this->context->dbDriver->commonSchema . '.job');
+            
+            while ($job = pg_fetch_assoc($results)) {
+                $jobs[] = $this->internalToJob($job, false);
+            }
+        
+        } catch (Exception $e) {
+            return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
+        }
+
+        return array(
+            'jobs' => $jobs,
+            'links' => array()
+        );
+
     }
 
     /**
@@ -596,6 +615,22 @@ class Process extends RestoAddOn
     public function getJob($params)
     {
 
+        try {
+
+            $results = $this->context->dbDriver->pQuery('SELECT id, userid as owner, process_id, type, status, message, to_iso8601(created) as created, to_iso8601(started) as started, to_iso8601(finished) as finished, to_iso8601(updated) as updated, progress, links FROM ' . $this->context->dbDriver->commonSchema . '.job WHERE id=($1)', array(
+                $params['jobId']
+            ));
+    
+            if ( !isset($results) || count($results) !== 1 ) {
+                return RestoLogUtil::httpError(404);
+            }
+            
+        } catch (Exception $e) {
+            return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
+        }
+
+        return $this->internalToJob($results[0], true);
+
     }
 
 
@@ -631,7 +666,7 @@ class Process extends RestoAddOn
             if ( !$fullDescription && in_array($key, array('inputs', 'outputs')) ) {
                 continue;
             }
-            $process[$key] = $key === 'links' ? $this->setOutputLinks($value) : $value;
+            $process[$key] = $key === 'links' ? $this->setProcessLinks($process['id'], $value) : $value;
         }
 
         return $process;
@@ -675,6 +710,33 @@ class Process extends RestoAddOn
     }
 
     /**
+     * Convert raw job from database to an OGC API Job
+     *
+     * @param array $internalJob
+     * @param boolean $fullDescription
+     * 
+     */
+    private function internalToJob($internalJob)
+    {
+
+        return array(
+            'jobID' => $internalJob['id'],
+            'processId' => $internalJob['process_id'],
+            'owner' => $internalJob['owner'],
+            'type' => $internalJob['type'],
+            'status' => (integer) $internalJob['status'],
+            'message' => $internalJob['message'],
+            'created' => $internalJob['created'],
+            'started' => $internalJob['started'],
+            'finished' => $internalJob['finished'],
+            'updated' => $internalJob['updated'],
+            'progress' => (integer) $internalJob['progress'],
+            'links' => $this->setJobLinks($internalJob['id'], json_decode($internalJob['links'], true))
+        );
+
+    }
+
+    /**
      * Remove input links that are handled by resto
      * 
      * List of possible links from specification are defined here https://docs.ogc.org/is/18-062r2/18-062r2.html#toc16
@@ -710,12 +772,25 @@ class Process extends RestoAddOn
     }
 
     /**
-     * Add resto links
+     * Compute process links
      * 
+     * @param string $processId
      * @param array $links
      * @return array
      */
-    private function setOutputLinks($links)
+    private function setProcessLinks($processId, $links)
+    {
+        return $links;
+    }
+
+    /**
+     * Compute job links
+     * 
+     * @param string $jobId
+     * @param array $links
+     * @return array
+     */
+    private function setJobLinks($jobId, $links)
     {
         return $links;
     }

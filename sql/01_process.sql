@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS __DATABASE_COMMON_SCHEMA__.job (
     finished                TIMESTAMP,
     updated                 TIMESTAMP,
     progress                INTEGER,
-    content                 JSON         -- Every properties from OGC API Processes job object
+    links                   JSON
 );
 
 --
