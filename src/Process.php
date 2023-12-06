@@ -323,7 +323,12 @@ class Process extends RestoAddOn
     {
         return array(
             'conformsTo' => array(
-
+                'http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/core',
+		        'http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/json',
+		        'http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/oas30',
+                'http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/job-list',
+                'http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/ogc-process-description',
+                'http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/dismiss'
             )
         );
     }
@@ -772,7 +777,7 @@ class Process extends RestoAddOn
     public function deleteJob($params)
     {
 
-        $job = $this->getJob($params['jobId']);
+        $job = $this->getJob($params);
 
         // Only the owner of the job or the admin can delete it
         if ($job['owner'] !== $this->user->profile['id']) {
@@ -868,9 +873,7 @@ class Process extends RestoAddOn
     {
 
         // Check that process exists
-        $this->getProcess(array(
-            'processId' => $params['processId']
-        ));
+        $this->getProcess($params);
         
         try {
             
@@ -895,10 +898,17 @@ class Process extends RestoAddOn
 
     }
 
+    /**
+     * Convert raw process from database to an OGC API Process
+     *
+     * @param array $params
+     * @param boolean $array
+     */
     public function getResults($params)
     {
-
-
+        return array(
+            'message' => 'TODO'
+        );
     }
 
     /**
