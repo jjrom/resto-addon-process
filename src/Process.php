@@ -6,6 +6,15 @@
  * file 'LICENSE.txt', which is part of this source code package.
  */
 
+require_once(realpath(dirname(__FILE__)) . '/docker-php/vendor/autoload.php');
+use Docker\Docker;
+use Docker\DockerClientFactory;
+
+/*require_once(realpath(dirname(__FILE__)) . '/rrabbit-vendor/autoload.php');
+use PhpAmqpLib\Connection\AMQPStreamConnection;
+use PhpAmqpLib\Message\AMQPMessage;
+*/
+
 /**
  *
  *  @OA\Schema(
@@ -251,6 +260,18 @@ class Process extends RestoAddOn
      */
     public function hello()
     {
+
+        $client = DockerClientFactory::create([
+            'remote_socket' => 'tcp://host.docker.internal:1234',
+            'ssl' => false,
+        ]);
+        $docker = Docker::create($client);
+        $containers = $docker->containerList();
+
+        foreach ($containers as $container) {
+            var_dump($container->getNames());
+        }
+
         return array(
             'title' => 'OGC API Processes server',
             'description' => 'OGC API Processes server provided by resto engine (https://github.com/jjrom/resto)',
