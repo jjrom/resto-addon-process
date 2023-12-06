@@ -11,6 +11,24 @@ Installation trough composer under src/docker-php
     composer require beluga-php/docker-php
     composer require beluga-php/docker-php-api
 
+Test it within php:
+
+        $client = DockerClientFactory::create([
+            'remote_socket' => 'tcp://host.docker.internal:1234',
+            'ssl' => false,
+        ]);
+        $docker = Docker::create($client);
+
+        $containerConfig = new ContainersCreatePostBody();
+        $containerConfig->setImage('busybox:latest');
+        $containerConfig->setCmd(['sleep', '1m']);
+        $containerCreateResult = $docker->containerCreate($containerConfig);
+        $containerId = $containerCreateResult->getId();
+        $docker->containerStart($containerId);
+        return array(
+            'containerId' => $containerId
+        );
+    
 ## Docker host configuration
 MacOS does not provide docker TCP connection by default. Needs to run socat
 
