@@ -591,9 +591,9 @@ class Process extends RestoAddOn
 
         try {
 
-            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('SELECT id, userid as owner, title, description, version, keywords, to_iso8601(created) as created, content FROM ' . $this->context->dbDriver->commonSchema . '.process WHERE id=($1)', array(
+            $results = $this->context->dbDriver->fetch($this->context->dbDriver->fetch($this->context->dbDriver->pQuery('SELECT id, userid as owner, title, description, version, keywords, to_iso8601(created) as created, content FROM ' . $this->context->dbDriver->commonSchema . '.process WHERE id=($1)', array(
                 $params['processId']
-            )));
+            ))));
 
             if (!isset($results) || count($results) !== 1) {
                 return RestoLogUtil::httpError(404);
@@ -710,9 +710,9 @@ class Process extends RestoAddOn
 
         try {
 
-            $results = $this->context->dbDriver->pQuery('SELECT ' . $this->jobColumns . ' FROM ' . $this->context->dbDriver->commonSchema . '.job WHERE id=($1)', array(
+            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('SELECT ' . $this->jobColumns . ' FROM ' . $this->context->dbDriver->commonSchema . '.job WHERE id=($1)', array(
                 $params['jobId']
-            ));
+            )));
 
             if (!isset($results) || count($results) !== 1) {
                 return RestoLogUtil::httpError(404);
@@ -788,10 +788,10 @@ class Process extends RestoAddOn
 
         try {
 
-            $results = $this->context->dbDriver->pQuery('UPDATE ' . $this->context->dbDriver->commonSchema . '.job SET status=$2, updated=now(), finished=now() WHERE id=($1) RETURNING ' . $this->jobColumns, array(
+            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('UPDATE ' . $this->context->dbDriver->commonSchema . '.job SET status=$2, updated=now(), finished=now() WHERE id=($1) RETURNING ' . $this->jobColumns, array(
                 $params['jobId'],
                 'dismissed'
-            ));
+            )));
 
             if (!isset($results) || count($results) !== 1) {
                 return RestoLogUtil::httpError(410);
