@@ -6,11 +6,6 @@
  * file 'LICENSE.txt', which is part of this source code package.
  */
 
-require_once(realpath(dirname(__FILE__)) . '/docker-php/vendor/autoload.php');
-use Docker\Docker;
-use Docker\DockerClientFactory;
-use Docker\API\Model\ContainersCreatePostBody;
-
 /**
  *
  *  @OA\Schema(
@@ -56,40 +51,6 @@ use Docker\API\Model\ContainersCreatePostBody;
  *                  property="href",
  *                  type="string"
  *              )
- *      ),
- *      @OA\Property(
- *          property="additionalParameters",
- *          type="array",
- *          @OA\Items(
- *              type="object",
- *              @OA\Property(
- *                  property="title",
- *                  type="string"
- *              ),
- *              @OA\Property(
- *                  property="role",
- *                  type="string"
- *              ),
- *              @OA\Property(
- *                  property="href",
- *                  type="string"
- *              ),
- *              @OA\Property(
- *                  property="parameters",
- *                  type="array",
- *                  @OA\Items(
- *                      type="object",
- *                      required={"name", "value"},
- *                      @OA\Property(
- *                          property="name",
- *                          type="string"
- *                      ),
- *                      @OA\Property(
- *                          property="name",
- *                          oneOf={"integer", "number", "string", "object"}
- *                      )
- *                  )
- *              ),
  *      ),
  *      @OA\Property(
  *          property="jobControlOptions",
@@ -180,7 +141,21 @@ use Docker\API\Model\ContainersCreatePostBody;
  *      )
  *  )
  *
- *
+ *  // https://github.com/opengeospatial/ogcapi-processes/blob/master/openapi/schemas/processes-dru/executionUnit.yaml
+ *  @OA\Schema(
+ *      schema="ApplicationPackage",
+ *      required={"executionUnit"},
+ *      @OA\Property(
+ *          property="processDescription",
+ *          @OA\Items(ref="#/components/schemas/Process")
+ *      ),
+ *      @OA\Property(
+ *          property="executionUnit",
+ *          type="object",
+ *          @OA\JsonContent()
+ *      )
+ *  )
+ * 
  * Process management add-on
  */
 class Process extends RestoAddOn
@@ -438,9 +413,9 @@ class Process extends RestoAddOn
      *          @OA\JsonContent(ref="#/components/schemas/BadRequestError")
      *      ),
      *      @OA\RequestBody(
-     *         description="Process infos",
+     *         description="Process definition as an ApplicationPackage",
      *         required=true,
-     *         @OA\JsonContent(ref="#/components/schemas/Process")
+     *         @OA\JsonContent(ref="#/components/schemas/ApplicationPackage")
      *      ),
      *      security={
      *          {"basicAuth":{}, "bearerAuth":{}, "queryAuth":{}}
@@ -469,21 +444,23 @@ class Process extends RestoAddOn
             return RestoLogUtil::httpError(403);
         }
 
-        $internalProcess = $this->processToInternal($body);
+        $internalProcess = $this->apToInternal($body);
+
         if ($this->processExists($internalProcess['id'])) {
             RestoLogUtil::httpError(409, 'Process ' . $internalProcess['id'] . ' already exist');
         }
 
         try {
 
-            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('INSERT INTO ' . $this->context->dbDriver->commonSchema . '.process (id, userid, title, description, version, keywords, content, created) VALUES ($1, $2, $3, $4, $5, $6, $7, now()) ON CONFLICT (id) DO NOTHING RETURNING id', array(
+            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('INSERT INTO ' . $this->context->dbDriver->commonSchema . '.process (id, userid, title, description, version, keywords, content, execution_unit, created) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now()) ON CONFLICT (id) DO NOTHING RETURNING id', array(
                 $internalProcess['id'],
                 $this->user->profile['id'],
                 $internalProcess['title'],
                 $internalProcess['description'],
                 $internalProcess['version'],
                 isset($internalProcess['keywords']) ? '{' . join(',', $internalProcess['keywords']) . '}' : null,
-                json_encode($internalProcess['content'], JSON_UNESCAPED_SLASHES)
+                json_encode($internalProcess['content'], JSON_UNESCAPED_SLASHES),
+                json_encode($internalProcess['executionUnit'], JSON_UNESCAPED_SLASHES)
             )));
 
             if (count($results) !== 1) {
@@ -534,10 +511,13 @@ class Process extends RestoAddOn
 
         try {
 
-            $results = $this->context->dbDriver->query('SELECT id, userid as owner, title, description, version, keywords, to_iso8601(created) as created, content FROM ' . $this->context->dbDriver->commonSchema . '.process');
+            $results = $this->context->dbDriver->query('SELECT id, userid as owner, title, description, version, keywords, to_iso8601(created) as created, content, execution_unit FROM ' . $this->context->dbDriver->commonSchema . '.process');
 
             while ($process = pg_fetch_assoc($results)) {
-                $processes[] = $this->internalToProcess($process, false);
+                $processes[] = $this->internalToProcess($process, array(
+                    'showExecutionUnit' => false,
+                    'showIO' => false
+                ));
             }
 
         } catch (Exception $e) {
@@ -614,7 +594,10 @@ class Process extends RestoAddOn
             return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
         }
 
-        return $this->internalToProcess($results[0], true);
+        return $this->internalToProcess($results[0], array(
+            'showExecutionUnit' => false,
+            'showIO' => true
+        ));
 
     }
 
@@ -921,9 +904,9 @@ class Process extends RestoAddOn
      * Convert raw process from database to an OGC API Process
      *
      * @param array $internalProcess
-     * @param boolean $fullDescription
+     * @param array $options
      */
-    private function internalToProcess($internalProcess, $fullDescription)
+    private function internalToProcess($internalProcess, $options)
     {
 
         $process = array(
@@ -936,10 +919,15 @@ class Process extends RestoAddOn
 
         $content = json_decode($internalProcess['content'], true);
         foreach ($content as $key => $value) {
-            if (!$fullDescription && in_array($key, array('inputs', 'outputs', 'links'))) {
+            if ( !$options['showIO'] && in_array($key, array('inputs', 'outputs', 'links')) ) {
                 continue;
             }
             $process[$key] = $value;
+        }
+
+        // ExecutionUnit
+        if ( $options['showExecutionUnit'] ) {
+            $process['executionUnit'] = json_decode($internalProcess['execution_unit'], true);
         }
 
         // Links
@@ -959,36 +947,55 @@ class Process extends RestoAddOn
     }
 
     /**
-     * Format input process to match database requirement
+     * Format input ApplicationPackage to match database requirement
      *
-     * @param array $inputProcess : process description as json file
+     * @param array $apPackage : process description as json file
      */
-    private function processToInternal($inputProcess)
+    private function apToInternal($apPackage)
     {
 
         /*
-         * Check that inputProcess is a valid array
+         * Check that executionUnit and processDescription are set
          */
-        if ( !is_array($inputProcess) || !is_array($inputProcess['inputs']) || !is_array($inputProcess['outputs']) ) {
-            RestoLogUtil::httpError(400, 'Invalid input JSON process');
+        if ( !is_array($apPackage) || empty($apPackage['processDescription']) || empty($apPackage['executionUnit']) ) {
+            RestoLogUtil::httpError(400, 'Invalid input JSON Application Package - must contains both processDescription and executionUnit properties');
         }
 
+        /*
+         * Check that processDescription is valid
+         */
+        if ( !is_array($apPackage['processDescription']['inputs']) || !is_array($apPackage['processDescription']['outputs']) ) {
+            RestoLogUtil::httpError(400, 'Invalid input processDescription');
+        }
+
+        /*
+         * Check that executionUnit is valid
+         */
+        if ( isset($apPackage['executionUnit']['type']) && $apPackage['executionUnit']['type'] !== 'docker') {
+            RestoLogUtil::httpError(400, 'ExecutionUnit supports only type=docker');
+        }
+
+        if ( !isset($apPackage['executionUnit']['image']) ) {
+            RestoLogUtil::httpError(400, 'ExecutionUnit must provide a non empty image name');
+        }
+        
         $internalProcess = array(
             // Be permissive here, we create an UUID process id if not set in the inputProcess
-            'id' => $inputProcess['id'] ?? RestoUtil::toUUID(md5(microtime() . rand())),
-            'version' => $inputProcess['version'] ?? $this->apiVersion,
-            'title' => $inputProcess['title'] ?? null,
-            'description' => $inputProcess['description'] ?? null,
-            'keywords' => $inputProcess['keywords'] ?? array(),
-            'content' => array()
+            'id' => $apPackage['processDescription']['id'] ?? RestoUtil::toUUID(md5(microtime() . rand())),
+            'version' => $apPackage['processDescription']['version'] ?? $this->apiVersion,
+            'title' => $apPackage['processDescription']['title'] ?? null,
+            'description' => $apPackage['processDescription']['description'] ?? null,
+            'keywords' => $apPackage['processDescription']['keywords'] ?? array(),
+            'content' => array(),
+            'executionUnit' => $apPackage['executionUnit']
         );
 
         /*
          * Set content values
          */
         foreach (array_values(array('metadata', 'additionalParameters', 'jobControlOptions', 'outputTransmission', 'links', 'inputs', 'outputs')) as $key) {
-            if (isset($inputProcess[$key])) {
-                $internalProcess['content'][$key] = $key === 'links' ? $this->cleanInputLinks($inputProcess['links']) : $inputProcess[$key];
+            if (isset($apPackage['processDescription'][$key])) {
+                $internalProcess['content'][$key] = $key === 'links' ? $this->cleanInputLinks($apPackage['processDescription']['links']) : $apPackage['processDescription'][$key];
             }
         }
 

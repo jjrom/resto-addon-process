@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS __DATABASE_COMMON_SCHEMA__.process (
     version                 TEXT,
     keywords                TEXT[],
     created                 TIMESTAMP,
-    content                 JSON        -- Every properties from OGC API Processes process object
+    content                 JSON,             -- Every properties from OGC API Processes process object
+    execution_unit          JSON
 );
 
 --
