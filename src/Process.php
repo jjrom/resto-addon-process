@@ -176,10 +176,10 @@ class Process extends RestoAddOn
     private $landingRoot = '/oapi-p';
 
     /*
-     * List of job columns to retrieve in the SQL query
+     * List of job/process columns to retrieve in the SQL query
      */
-    private $jobColumns = 'id, userid as owner, process_id, type, status, message, to_iso8601(created) as created, to_iso8601(started) as started, to_iso8601(finished) as finished, to_iso8601(updated) as updated, progress, body';
-
+    private $jobColumns = 'id, userid as owner, process_id, type, status, message, to_iso8601(created) as created, to_iso8601(started) as started, to_iso8601(finished) as finished, to_iso8601(updated) as updated, progress, body, container_id';
+    private $processColumns = 'id, userid as owner, title, description, version, keywords, to_iso8601(created) as created, to_iso8601(updated) as updated, content, execution_unit';
     /**
      * Constructor
      *
@@ -452,7 +452,7 @@ class Process extends RestoAddOn
 
         try {
 
-            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('INSERT INTO ' . $this->context->dbDriver->commonSchema . '.process (id, userid, title, description, version, keywords, content, execution_unit, created) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now()) ON CONFLICT (id) DO NOTHING RETURNING id', array(
+            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('INSERT INTO ' . $this->context->dbDriver->commonSchema . '.process (id, userid, title, description, version, keywords, content, execution_unit, created, updated) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now()) ON CONFLICT (id) DO NOTHING RETURNING id', array(
                 $internalProcess['id'],
                 $this->user->profile['id'],
                 $internalProcess['title'],
@@ -479,6 +479,90 @@ class Process extends RestoAddOn
 
         return RestoLogUtil::success('Process created', array(
             'id' => $results[0]['id']
+        ));
+
+    }
+
+    /**
+     *  @OA\Put(
+     *      path="/processes/{processId}",
+     *      summary="Replace a process",
+     *      description="Replace a process",
+     *      tags={"process"},
+     *      @OA\Parameter(
+     *         name="processId",
+     *         in="path",
+     *         required=true,
+     *         description="process's identifier",
+     *         @OA\Schema(
+     *             type="string"
+     *         )
+     *      ),
+     *      @OA\Response(
+     *          response="204",
+     *          description="Acknowledgement of process update",
+     *      ),
+     *      @OA\Response(
+     *          response="403",
+     *          description="Forbidden",
+     *          @OA\JsonContent(ref="#/components/schemas/ForbiddenError")
+     *      ),
+     *      @OA\RequestBody(
+     *         description="Process definition as an ApplicationPackage",
+     *         required=true,
+     *         @OA\JsonContent(ref="#/components/schemas/ApplicationPackage")
+     *      ),
+     *      security={
+     *          {"basicAuth":{}, "bearerAuth":{}, "queryAuth":{}}
+     *      }
+     *  )
+     * 
+     * @param array $params
+     * @param array $body
+     */
+    public function replace($params, $body)
+    {
+
+        $process = $this->getProcess($params);
+
+        // Only the owner of the process or the admin can delete it
+        if ($process['owner'] !== $this->user->profile['id']) {
+            if (!$this->user->hasGroup(RestoConstants::GROUP_ADMIN_ID)) {
+                return RestoLogUtil::httpError(403);
+            }
+        }
+        
+        $internalProcess = $this->apToInternal($body);
+
+        if ( $internalProcess['id'] !== $params['processId'] ) {
+            return RestoLogUtil::httpError(400, 'Process identifier does not match ressource ' . $params['processId']);
+        }
+
+        try {
+            
+            $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('UPDATE ' . $this->context->dbDriver->commonSchema . '.process SET userid=$2, title=$3, description=$4, version=$5, keywords=$6, content=$7, execution_unit=$8, updated=now() WHERE id=$1', array(
+                $internalProcess['id'],
+                $this->user->profile['id'],
+                $internalProcess['title'],
+                $internalProcess['description'],
+                $internalProcess['version'],
+                isset($internalProcess['keywords']) ? '{' . join(',', $internalProcess['keywords']) . '}' : null,
+                json_encode($internalProcess['content'], JSON_UNESCAPED_SLASHES),
+                json_encode($internalProcess['executionUnit'], JSON_UNESCAPED_SLASHES)
+            )));
+
+        } catch (Exception $e) {
+            return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
+        }
+
+        /*
+         * [IMPORTANT] Specification requires HTTP 204 No Content, not 200
+         * (see https://github.com/opengeospatial/ogcapi-processes/blob/master/extensions/deploy_replace_undeploy/standard/sections/clause_6_deploy_replace_undeploy.adoc#deploying-a-new-process-to-the-api
+         */
+        $this->context->httpStatus = 204;
+
+        return RestoLogUtil::success('Process updated', array(
+            'id' => $internalProcess['id']
         ));
 
     }
@@ -517,7 +601,7 @@ class Process extends RestoAddOn
 
         try {
 
-            $results = $this->context->dbDriver->query('SELECT id, userid as owner, title, description, version, keywords, to_iso8601(created) as created, content, execution_unit FROM ' . $this->context->dbDriver->commonSchema . '.process');
+            $results = $this->context->dbDriver->query('SELECT ' . $this->processColumns . ' FROM ' . $this->context->dbDriver->commonSchema . '.process');
 
             while ($process = pg_fetch_assoc($results)) {
                 $processes[] = $this->internalToProcess($process, array(
@@ -583,12 +667,12 @@ class Process extends RestoAddOn
      *
      *  @param array $params
      */
-    public function getProcess($params)
+    public function getProcess($params, $showExecutionUnit = false)
     {
 
         try {
 
-            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('SELECT id, userid as owner, title, description, version, keywords, to_iso8601(created) as created, content FROM ' . $this->context->dbDriver->commonSchema . '.process WHERE id=($1)', array(
+            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('SELECT ' . $this->processColumns . ' FROM ' . $this->context->dbDriver->commonSchema . '.process WHERE id=($1)', array(
                 $params['processId']
             )));
 
@@ -601,12 +685,11 @@ class Process extends RestoAddOn
         }
 
         return $this->internalToProcess($results[0], array(
-            'showExecutionUnit' => false,
+            'showExecutionUnit' => $showExecutionUnit,
             'showIO' => true
         ));
 
     }
-
 
     /**
      * [IMPORTANT] When process is deleted, all related jobs are also deleted from the database
@@ -929,18 +1012,18 @@ class Process extends RestoAddOn
     public function executeProcess($params, $body)
     {
 
-        // Check that process exists
-        $this->getProcess($params);
-        
+        $containerId = $this->launchContainer($this->getProcess($params, true));
+
         try {
             
-            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('INSERT INTO ' . $this->context->dbDriver->commonSchema . '.job (id, userid, process_id, status, created, started, updated, progress, body) VALUES ($1, $2, $3, $4, now(), now(), now(), $5, $6) RETURNING ' . $this->jobColumns, array(
+            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('INSERT INTO ' . $this->context->dbDriver->commonSchema . '.job (id, userid, process_id, status, created, started, updated, progress, body, container_id) VALUES ($1, $2, $3, $4, now(), now(), now(), $5, $6, $7) RETURNING ' . $this->jobColumns, array(
                 RestoUtil::toUUID(md5(microtime() . rand())),
                 $this->user->profile['id'],
                 $params['processId'],
                 'accepted',
                 0,
-                json_encode($body, JSON_UNESCAPED_SLASHES)
+                json_encode($body, JSON_UNESCAPED_SLASHES),
+                $containerId
             )));
 
             if (count($results) !== 1) {
@@ -1074,7 +1157,7 @@ class Process extends RestoAddOn
      * Convert raw job from database to an OGC API Job
      *
      * @param array $internalJob
-     * @param boolean $showBody -- Set to true only internally to get the inputs/outputs info
+     * @param boolean $showBody -- Set to true only internaly to get the inputs/outputs info and the container_id
      *
      */
     private function internalToJob($internalJob, $showBody)
@@ -1084,7 +1167,7 @@ class Process extends RestoAddOn
             array(
                 'rel' => 'status',
                 'type' => RestoUtil::$contentTypes['json'],
-                'href' => $this->context->core['baseUrl'] . $this->landingRoot . '/jobs/' . $internalJob['id'] . '/execution'
+                'href' => $this->context->core['baseUrl'] . $this->landingRoot . '/jobs/' . $internalJob['id']
             )
         );
 
@@ -1120,6 +1203,7 @@ class Process extends RestoAddOn
 
         if ($showBody) {
             $job['body'] = json_decode($internalJob['body'], true);
+            $job['container_id'] = $internalJob['container_id'];
         }
 
         return $job;
@@ -1174,5 +1258,33 @@ class Process extends RestoAddOn
         return !empty($results);
     }
 
+    /**
+     * Launch container on remote socket
+     * 
+     * @param $process
+     */
+    private function launchContainer($process)
+    {
+        
+        // Launch process
+        try {
+            $remote_socket = $process['executionUnit']['host'] ?? $this->options['executionUnit']['host'] ?? null;
+            $processRunner = new ProcessRunner(array(
+                'remote_socket' => $remote_socket,
+                'ssl' => $process['executionUnit']['ssl'] ?? $this->options['executionUnit']['ssl'] ?? false
+            ));
+        } catch (Exception $e) {
+            return RestoLogUtil::httpError(500, 'Cannot connect to remote_socket ' . $process['executionUnit']['host'] ?? $this->options['executionUnit']['host'] ?? null);
+        }
+        
+        try {    
+            $containerId = $processRunner->startContainer($process['executionUnit']['image'], array(), array());
+        } catch (Exception $e) {
+            return RestoLogUtil::httpError(400, $e->getMessage());
+        }
+
+        return $containerId;
+
+    }
 
 }

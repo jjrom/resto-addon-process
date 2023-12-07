@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS __DATABASE_COMMON_SCHEMA__.process (
     version                 TEXT,
     keywords                TEXT[],
     created                 TIMESTAMP,
+    updated                 TIMESTAMP,
     content                 JSON,             -- Every properties from OGC API Processes process object
     execution_unit          JSON
 );
@@ -34,7 +35,8 @@ CREATE TABLE IF NOT EXISTS __DATABASE_COMMON_SCHEMA__.job (
     finished                TIMESTAMP,
     updated                 TIMESTAMP,
     progress                INTEGER,
-    body                    JSON -- This is what is post for process execution i.e. inputs and outputs
+    body                    JSON, -- This is what is post for process execution i.e. inputs and outputs
+    container_id            TEXT
 );
 
 --

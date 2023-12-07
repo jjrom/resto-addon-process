@@ -14,20 +14,28 @@ Installation trough composer under src/docker-php
 ## Docker host configuration
 MacOS does not provide docker TCP connection by default. Needs to run socat
 
-docker run -d -v /var/run/docker.sock:/var/run/docker.sock -p 127.0.0.1:1234:1234 bobrik/socat TCP-LISTEN:1234,fork UNIX-CONNECT:/var/run/docker.sock
+docker run -d -v /var/run/docker.sock:/var/run/docker.sock -p 127.0.0.1:1234:2375 bobrik/socat TCP-LISTEN:2375,fork UNIX-CONNECT:/var/run/docker.sock
 
 ## Test
 
-Ingest a process
+Deploy a process
 
-    curl -v -X POST -d@data/processExample.json "http://admin:admin@localhost:5252/oapi-p/processes"
+    curl -v -X POST -d@data/echoProcess.json "http://admin:admin@localhost:5252/oapi-p/processes"
     
-Delete a process
+Replace a process
+
+    curl -v -X PUT -d@data/echoProcess.json "http://admin:admin@localhost:5252/oapi-p/processes"
+
+Get a process
+
+    curl -v -X GET "http://admin:admin@localhost:5252/oapi-p/processes/EchoProcess"
+    
+Undeploy a process
 
     curl -X DELETE "http://admin:admin@localhost:5252/oapi-p/processes/EchoProcess"
     
 Execute a process
 
-    curl -X POST -d@data/executionExample.json "http://admin:admin@localhost:5252/oapi-p/processes/EchoProcess/execution"
+    curl -X POST -d@data/echoProcessExecution.json "http://admin:admin@localhost:5252/oapi-p/processes/EchoProcess/execution"
     
 
