@@ -11,24 +11,6 @@ Installation trough composer under src/docker-php
     composer require beluga-php/docker-php
     composer require beluga-php/docker-php-api
 
-Test it within php:
-
-        $client = DockerClientFactory::create([
-            'remote_socket' => 'tcp://host.docker.internal:1234',
-            'ssl' => false,
-        ]);
-        $docker = Docker::create($client);
-
-        $containerConfig = new ContainersCreatePostBody();
-        $containerConfig->setImage('busybox:latest');
-        $containerConfig->setCmd(['sleep', '1m']);
-        $containerCreateResult = $docker->containerCreate($containerConfig);
-        $containerId = $containerCreateResult->getId();
-        $docker->containerStart($containerId);
-        return array(
-            'containerId' => $containerId
-        );
-    
 ## Docker host configuration
 MacOS does not provide docker TCP connection by default. Needs to run socat
 
@@ -38,7 +20,11 @@ docker run -d -v /var/run/docker.sock:/var/run/docker.sock -p 127.0.0.1:1234:123
 
 Ingest a process
 
-    curl -X POST -d@data/processExample.json "http://admin:admin@localhost:5252/oapi-p/processes"
+    curl -v -X POST -d@data/processExample.json "http://admin:admin@localhost:5252/oapi-p/processes"
+    
+Delete a process
+
+    curl -X DELETE "http://admin:admin@localhost:5252/oapi-p/processes/EchoProcess"
     
 Execute a process
 

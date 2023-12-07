@@ -377,7 +377,7 @@ class Process extends RestoAddOn
      *      description="Add a process",
      *      tags={"process"},
      *      @OA\Response(
-     *          response="200",
+     *          response="201",
      *          description="Acknowledgement of process creation",
      *          @OA\JsonContent(
      *              @OA\Property(
@@ -471,6 +471,12 @@ class Process extends RestoAddOn
             return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
         }
 
+        /*
+         * [IMPORTANT] Specification requires HTTP 201 Created, not 200
+         * (see https://github.com/opengeospatial/ogcapi-processes/blob/master/extensions/deploy_replace_undeploy/standard/sections/clause_6_deploy_replace_undeploy.adoc#deploying-a-new-process-to-the-api
+         */
+        $this->context->httpStatus = 201;
+        
         return RestoLogUtil::success('Process created', array(
             'id' => $results[0]['id']
         ));
@@ -601,6 +607,73 @@ class Process extends RestoAddOn
 
     }
 
+
+    /**
+     * [IMPORTANT] When process is deleted, all related jobs are also deleted from the database
+     *
+     *  @OA\Delete(
+     *      path="/process/{processId}",
+     *      summary="Delete a process",
+     *      description="Delete a process - this remove all related jobs in cascade",
+     *      tags={"process"},
+     *      @OA\Parameter(
+     *         name="processId",
+     *         in="path",
+     *         required=true,
+     *         description="process's identifier",
+     *         @OA\Schema(
+     *             type="string"
+     *         )
+     *      ),
+     *      @OA\Response(
+     *          response="200"
+     *      ),
+     *      @OA\Response(
+     *          response="404",
+     *          description="Not Found",
+     *          @OA\JsonContent(ref="#/components/schemas/NotFoundError")
+     *      ),
+     *      @OA\Response(
+     *          response="410",
+     *          description="Gone",
+     *          @OA\JsonContent(ref="#/components/schemas/GoneError")
+     *      )
+     *  )
+     *
+     *  @param array $params
+     */
+    public function deleteProcess($params)
+    {
+
+        $process = $this->getProcess($params);
+
+        // Only the owner of the process or the admin can delete it
+        if ($process['owner'] !== $this->user->profile['id']) {
+            if (!$this->user->hasGroup(RestoConstants::GROUP_ADMIN_ID)) {
+                return RestoLogUtil::httpError(403);
+            }
+        }
+
+        try {
+
+            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('DELETE FROM ' . $this->context->dbDriver->commonSchema . '.process WHERE id=($1) RETURNING id', array(
+                $params['processId']
+            )));
+
+            if (!isset($results) || count($results) !== 1) {
+                return RestoLogUtil::httpError(500);
+            }
+
+        } catch (Exception $e) {
+            return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
+        }
+
+        return RestoLogUtil::success('Process deleted', array(
+            'id' => $results[0]['id']
+        ));
+
+    }
+
     /**
      *  @OA\Get(
      *      path="/jobs",
@@ -684,11 +757,6 @@ class Process extends RestoAddOn
      *          @OA\JsonContent(
      *              ref="#/components/schemas/Job"
      *          )
-     *      ),
-     *      @OA\Response(
-     *          response="400",
-     *          description="Invalid *jobId*",
-     *          @OA\JsonContent(ref="#/components/schemas/BadRequestError")
      *      ),
      *      @OA\Response(
      *          response="404",
