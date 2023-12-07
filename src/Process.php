@@ -309,7 +309,8 @@ class Process extends RestoAddOn
 		        'http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/oas30',
                 'http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/job-list',
                 'http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/ogc-process-description',
-                'http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/dismiss'
+                'http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/dismiss',
+                'http://www.opengis.net/spec/ogcapi-processes-2/1.0/req/deploy-replace-undeploy'
             )
         );
     }
