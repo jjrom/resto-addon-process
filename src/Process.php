@@ -436,7 +436,7 @@ class Process extends RestoAddOn
      * @param array $params
      * @param array $body
      */
-    public function addProcess($params, $body)
+    public function deploy($params, $body)
     {
 
         // Only admin can post process
@@ -476,7 +476,7 @@ class Process extends RestoAddOn
          * (see https://github.com/opengeospatial/ogcapi-processes/blob/master/extensions/deploy_replace_undeploy/standard/sections/clause_6_deploy_replace_undeploy.adoc#deploying-a-new-process-to-the-api
          */
         $this->context->httpStatus = 201;
-        
+
         return RestoLogUtil::success('Process created', array(
             'id' => $results[0]['id']
         ));
@@ -642,7 +642,7 @@ class Process extends RestoAddOn
      *
      *  @param array $params
      */
-    public function deleteProcess($params)
+    public function undeploy($params)
     {
 
         $process = $this->getProcess($params);
