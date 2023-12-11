@@ -524,7 +524,9 @@ class Process extends RestoAddOn
     public function replace($params, $body)
     {
 
-        $process = $this->getProcess($params);
+        $process = $this->getProcess($params, array(
+            'showOwner' => true
+        ));
 
         // Only the owner of the process or the admin can delete it
         if ($process['owner'] !== $this->user->profile['id']) {
@@ -607,7 +609,8 @@ class Process extends RestoAddOn
             while ($process = pg_fetch_assoc($results)) {
                 $processes[] = $this->internalToProcess($process, array(
                     'showExecutionUnit' => false,
-                    'showIO' => false
+                    'showIO' => false,
+                    'showOwner' => false
                 ));
             }
 
@@ -668,7 +671,7 @@ class Process extends RestoAddOn
      *
      *  @param array $params
      */
-    public function getProcess($params, $showExecutionUnit = false)
+    public function getProcess($params, $options = array())
     {
 
         try {
@@ -685,10 +688,7 @@ class Process extends RestoAddOn
             return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
         }
 
-        return $this->internalToProcess($results[0], array(
-            'showExecutionUnit' => $showExecutionUnit,
-            'showIO' => true
-        ));
+        return $this->internalToProcess($results[0], $options);
 
     }
 
@@ -729,7 +729,9 @@ class Process extends RestoAddOn
     public function undeploy($params)
     {
 
-        $process = $this->getProcess($params);
+        $process = $this->getProcess($params, array(
+            'showOwner' => true
+        ));
 
         // Only the owner of the process or the admin can delete it
         if ($process['owner'] !== $this->user->profile['id']) {
@@ -1013,7 +1015,13 @@ class Process extends RestoAddOn
     public function executeProcess($params, $body)
     {
 
-        $containerId = $this->launchContainer($this->getProcess($params, true));
+        $process = $this->getProcess($params, array(
+            'showExecutionUnit' => true,
+            'showIO' => true,
+            'showOwner' => true
+        ));
+
+        $containerId = $this->launchContainer($process['executionUnit']);
 
         try {
             
@@ -1063,6 +1071,7 @@ class Process extends RestoAddOn
 
         $process = array(
             'id' => $internalProcess['id'],
+            'owner' => $internalProcess['owner'],
             'version' => $internalProcess['version'],
             'title' => $internalProcess['title'] ?? null,
             'description' => $internalProcess['description'] ?? null,
@@ -1075,6 +1084,11 @@ class Process extends RestoAddOn
                 continue;
             }
             $process[$key] = $value;
+        }
+
+        // Owner
+        if ( $options['showOwner'] ) {
+            $process['owner'] = json_decode($internalProcess['owner'], true);
         }
 
         // ExecutionUnit
@@ -1262,24 +1276,24 @@ class Process extends RestoAddOn
     /**
      * Launch container on remote socket
      * 
-     * @param $process
+     * @param $executionUnit
      */
-    private function launchContainer($process)
+    private function launchContainer($executionUnit)
     {
         
         // Launch process
         try {
-            $remote_socket = $process['executionUnit']['host'] ?? $this->options['executionUnit']['host'] ?? null;
+            $remote_socket = $executionUnit['host'] ?? $this->options['executionUnit']['host'] ?? null;
             $processRunner = new ProcessRunner(array(
                 'remote_socket' => $remote_socket,
-                'ssl' => $process['executionUnit']['ssl'] ?? $this->options['executionUnit']['ssl'] ?? false
+                'ssl' => $executionUnit['ssl'] ?? $this->options['executionUnit']['ssl'] ?? false
             ));
         } catch (Exception $e) {
-            return RestoLogUtil::httpError(500, 'Cannot connect to remote_socket ' . $process['executionUnit']['host'] ?? $this->options['executionUnit']['host'] ?? null);
+            return RestoLogUtil::httpError(500, 'Cannot connect to remote_socket ' . $executionUnit['host'] ?? $this->options['executionUnit']['host'] ?? null);
         }
         
         try {    
-            $containerId = $processRunner->startContainer($process['executionUnit']['image'], array(), array());
+            $containerId = $processRunner->startContainer($executionUnit['image'], array(), array());
         } catch (Exception $e) {
             return RestoLogUtil::httpError(400, $e->getMessage());
         }
