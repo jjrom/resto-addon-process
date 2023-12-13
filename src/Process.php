@@ -160,6 +160,9 @@
  */
 class Process extends RestoAddOn
 {
+
+    const GROUP_PROCESS_ADMIN_ID = 10;
+
     /**
      * Add-on version
      */
@@ -180,6 +183,7 @@ class Process extends RestoAddOn
      */
     private $jobColumns = 'id, userid as owner, process_id, type, status, message, to_iso8601(created) as created, to_iso8601(started) as started, to_iso8601(finished) as finished, to_iso8601(updated) as updated, progress, body, container_id';
     private $processColumns = 'id, userid as owner, title, description, version, keywords, to_iso8601(created) as created, to_iso8601(updated) as updated, content, execution_unit';
+    
     /**
      * Constructor
      *
@@ -441,7 +445,7 @@ class Process extends RestoAddOn
     {
 
         // Only admin can post process
-        if ( !$this->user->hasGroup(RestoConstants::GROUP_ADMIN_ID) ) {
+        if ( !$this->user->hasGroup(RestoConstants::GROUP_ADMIN_ID) && !$this->user->hasGroup(Process::GROUP_PROCESS_ADMIN_ID) ) {
             return RestoLogUtil::httpError(403);
         }
 
@@ -530,7 +534,7 @@ class Process extends RestoAddOn
 
         // Only the owner of the process or the admin can delete it
         if ($process['owner'] !== $this->user->profile['id']) {
-            if (!$this->user->hasGroup(RestoConstants::GROUP_ADMIN_ID)) {
+            if ( !$this->user->hasGroup(RestoConstants::GROUP_ADMIN_ID) && !$this->user->hasGroup(Process::GROUP_PROCESS_ADMIN_ID)) {
                 return RestoLogUtil::httpError(403);
             }
         }
@@ -735,7 +739,7 @@ class Process extends RestoAddOn
 
         // Only the owner of the process or the admin can delete it
         if ($process['owner'] !== $this->user->profile['id']) {
-            if (!$this->user->hasGroup(RestoConstants::GROUP_ADMIN_ID)) {
+            if ( !$this->user->hasGroup(RestoConstants::GROUP_ADMIN_ID) && !$this->user->hasGroup(Process::GROUP_PROCESS_ADMIN_ID)) {
                 return RestoLogUtil::httpError(403);
             }
         }
@@ -924,7 +928,7 @@ class Process extends RestoAddOn
 
         // Only the owner of the job or the admin can delete it
         if ($job['owner'] !== $this->user->profile['id']) {
-            if (!$this->user->hasGroup(RestoConstants::GROUP_ADMIN_ID)) {
+            if ( !$this->user->hasGroup(RestoConstants::GROUP_ADMIN_ID) && !$this->user->hasGroup(Process::GROUP_PROCESS_ADMIN_ID)) {
                 return RestoLogUtil::httpError(403);
             }
         }
@@ -943,6 +947,111 @@ class Process extends RestoAddOn
 
             if (!isset($results) || count($results) !== 1) {
                 return RestoLogUtil::httpError(410);
+            }
+
+        } catch (Exception $e) {
+            return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
+        }
+
+        return $this->internalToJob($results[0], false);
+
+    }
+
+    /**
+     *  @OA\Put(
+     *      path="/jobs/{jobId}",
+     *      summary="Update job status",
+     *      description="Update job status (i.e. status, progress and results)",
+     *      tags={"process"},
+     *      @OA\Parameter(
+     *         name="jobId",
+     *         in="path",
+     *         required=true,
+     *         description="job's identifier",
+     *         @OA\Schema(
+     *             type="string"
+     *         )
+     *      ),
+     *      @OA\Response(
+     *          response="204",
+     *          description="Acknowledgement of job update",
+     *      ),
+     *      @OA\Response(
+     *          response="403",
+     *          description="Forbidden",
+     *          @OA\JsonContent(ref="#/components/schemas/ForbiddenError")
+     *      ),
+     *      @OA\RequestBody(
+     *         description="Job status / progress / result",
+     *         required=true,
+     *          @OA\JsonContent(
+     *              @OA\Property(
+     *                  property="status",
+     *                  type="string",
+     *                  enum={"accepted", "running", "successful", "failed", "dismissed"}
+     *              ),
+     *              @OA\Property(
+     *                  property="progress",
+     *                  type="integer",
+     *                  minimum=0,
+     *                  maximum=100
+     *              ),
+     *          )
+     *      ),
+     *      security={
+     *          {"basicAuth":{}, "bearerAuth":{}, "queryAuth":{}}
+     *      }
+     *  )
+     * 
+     * @param array $params
+     * @param array $body
+     */
+    public function updateJob($params, $body)
+    {
+
+        $job = $this->getJob($params);
+
+        // Only the owner of the job or the admin can update it
+        if ($job['owner'] !== $this->user->profile['id']) {
+            if ( !$this->user->hasGroup(RestoConstants::GROUP_ADMIN_ID) && !$this->user->hasGroup(Process::GROUP_PROCESS_ADMIN_ID)) {
+                return RestoLogUtil::httpError(403);
+            }
+        }
+        
+        // Properties that can be updated
+        $update = array(
+            'updated=now()'
+        );
+
+        if ( isset($body['status']) ) {
+            if ( in_array($body['status'], array('accepted', 'running', 'successful', 'failed', 'dismissed')) ) {
+                $update[] = 'status=\'' . $body['status'] . '\'';
+                if ( in_array($body['status'], array('successful', 'failed') ) ) {
+                    $update[] = 'finished=now()';
+                    if ( $body['status'] === 'successful' ) {
+                        $update[] = 'progress=100';
+                    }
+                }
+            }
+            else {
+                return RestoLogUtil::httpError(400, 'Invalid status code');
+            }
+        }
+
+        if ( isset($body['progress']) ) {
+            if ( $body['progress'] >= 0 && $body['progress'] <= 100 ) {
+                $update[] = "progress=" . $body['progress'];
+            }
+            else {
+                return RestoLogUtil::httpError(400, 'Invalid progress value - should be between 0 and 100');
+            }
+        } 
+
+        try {
+            $results = $this->context->dbDriver->fetch($this->context->dbDriver->query('UPDATE ' . $this->context->dbDriver->commonSchema . '.job SET ' . join(',', $update) . ' WHERE id=\'' . pg_escape_string($this->context->dbDriver->getConnection(), $job['jobID']) . '\' RETURNING ' . $this->jobColumns));
+            
+            if (count($results) !== 1) {
+                throw new Exception(500, 'Cannot update job ' . $job['jobID']);
             }
 
         } catch (Exception $e) {
@@ -1021,18 +1130,19 @@ class Process extends RestoAddOn
             'showOwner' => true
         ));
 
-        $containerId = $this->launchContainer($process['executionUnit']);
+        $jobId = RestoUtil::toUUID(md5(microtime() . rand()));
+        $container = $this->launchContainer($jobId, $process['executionUnit']);
 
         try {
             
             $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('INSERT INTO ' . $this->context->dbDriver->commonSchema . '.job (id, userid, process_id, status, created, started, updated, progress, body, container_id) VALUES ($1, $2, $3, $4, now(), now(), now(), $5, $6, $7) RETURNING ' . $this->jobColumns, array(
-                RestoUtil::toUUID(md5(microtime() . rand())),
+                $jobId,
                 $this->user->profile['id'],
                 $params['processId'],
                 'accepted',
                 0,
                 json_encode($body, JSON_UNESCAPED_SLASHES),
-                $containerId
+                $container['containerId']
             )));
 
             if (count($results) !== 1) {
@@ -1080,19 +1190,19 @@ class Process extends RestoAddOn
 
         $content = json_decode($internalProcess['content'], true);
         foreach ($content as $key => $value) {
-            if ( !$options['showIO'] && in_array($key, array('inputs', 'outputs', 'links')) ) {
+            if ( empty($options['showIO']) && in_array($key, array('inputs', 'outputs', 'links')) ) {
                 continue;
             }
             $process[$key] = $value;
         }
 
         // Owner
-        if ( $options['showOwner'] ) {
+        if ( !empty($options['showOwner']) ) {
             $process['owner'] = json_decode($internalProcess['owner'], true);
         }
 
         // ExecutionUnit
-        if ( $options['showExecutionUnit'] ) {
+        if ( !empty($options['showExecutionUnit']) ) {
             $process['executionUnit'] = json_decode($internalProcess['execution_unit'], true);
         }
 
@@ -1276,9 +1386,10 @@ class Process extends RestoAddOn
     /**
      * Launch container on remote socket
      * 
+     * @param $jobId
      * @param $executionUnit
      */
-    private function launchContainer($executionUnit)
+    private function launchContainer($jobId, $executionUnit)
     {
         
         // Launch process
@@ -1293,12 +1404,12 @@ class Process extends RestoAddOn
         }
         
         try {    
-            $containerId = $processRunner->startContainer($executionUnit['image'], array(), array());
+            $container = $processRunner->startContainer($executionUnit['image'], array(), array());
         } catch (Exception $e) {
             return RestoLogUtil::httpError(400, $e->getMessage());
         }
 
-        return $containerId;
+        return $container;
 
     }
 
