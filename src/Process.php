@@ -1427,7 +1427,7 @@ class Process extends RestoAddOn
         
         // Convert inputs/outputs as Base64 env
         $env = array(
-            'JSON_INPUT_BASE64' => base64_encode(json_encode($body, JSON_UNESCAPED_SLASHES));
+            'JSON_INPUT_BASE64' => base64_encode(json_encode($body, JSON_UNESCAPED_SLASHES))
         );
 
         try {    
