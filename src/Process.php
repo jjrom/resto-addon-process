@@ -6,6 +6,10 @@
  * file 'LICENSE.txt', which is part of this source code package.
  */
 
+require_once(realpath(dirname(__FILE__)) . '/json-schema/vendor/autoload.php');
+use JsonSchema\Validator;
+use JsonSchema\Constraints\Constraint;
+
 /**
  *
  *  @OA\Schema(
@@ -529,7 +533,9 @@ class Process extends RestoAddOn
     {
 
         $process = $this->getProcess($params, array(
-            'showOwner' => true
+            'showOwner' => true,
+            'showExecutionUnit' => true,
+            'showIO' => true
         ));
 
         // Only the owner of the process or the admin can delete it
@@ -692,6 +698,14 @@ class Process extends RestoAddOn
             return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
         }
 
+        if ( empty($options) ) {
+            $options = array(
+                'showExecutionUnit' => false,
+                'showIO' => true,
+                'showOwner' => false
+            );
+        }
+
         return $this->internalToProcess($results[0], $options);
 
     }
@@ -734,6 +748,8 @@ class Process extends RestoAddOn
     {
 
         $process = $this->getProcess($params, array(
+            'showExecutionUnit' => true,
+            'showIO' => true,
             'showOwner' => true
         ));
 
@@ -1130,6 +1146,8 @@ class Process extends RestoAddOn
             'showOwner' => true
         ));
 
+        $this->validateInputs($body['inputs'], $process['inputs'] ?? array());
+
         $jobId = RestoUtil::toUUID(md5(microtime() . rand()));
         $container = $this->launchContainer($jobId, $process['executionUnit']);
 
@@ -1411,6 +1429,61 @@ class Process extends RestoAddOn
 
         return $container;
 
+    }
+
+    /**
+     * Validate against reference schemas
+     * 
+     * @param $inputs
+     * @param $reference
+     * @return boolean
+     */
+    private function validateInputs($inputs, $reference)
+    {
+
+        $retriever = new \PermissiveUriRetriever();
+        $refResolver = new JsonSchema\SchemaStorage($retriever);
+        $validator = new JsonSchema\Validator(new JsonSchema\Constraints\Factory($refResolver));
+
+        $referenceKeys = array_keys($reference);
+        
+        // Parse all inputs and 1. check if exist in reference and 2. validate schema
+        foreach($inputs as $key => $value) {
+            
+            if ( !in_array($key, $referenceKeys) ) {
+                return RestoLogUtil::httpError(400, 'Unknown input ' . $key);
+            }
+
+            if ( isset($reference[$key]['schema']) ) {
+                try {
+                    $inputsAsObject = json_decode(json_encode($inputs[$key]));
+                    //$validator->validate(json_decode(json_encode($inputs[$key])), $reference[$key]['schema'], Constraint::CHECK_MODE_DISABLE_FORMAT);    
+                    $validator->validate($inputsAsObject, $reference[$key]['schema']);    
+                } catch (Exception $e) {
+                    return RestoLogUtil::httpError(400, 'Error in input ' . $key . ' : ' . $e );
+                }
+                
+                if ( !$validator->isValid() ) {
+                    $errors = array();
+                    foreach ($validator->getErrors() as $error) {
+                        $errors[] = $error['message'];
+                    }
+                    return RestoLogUtil::httpError(400, 'Error in input ' . $key . ' : ' . join(' | ', $errors));
+                    
+                }
+            }
+
+        }
+
+        return true;
+    }
+
+}
+
+class PermissiveUriRetriever extends JsonSchema\Uri\UriRetriever {
+
+    public function confirmMediaType($uriRetriever, $uri) {
+        return;
     }
 
 }

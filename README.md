@@ -24,7 +24,7 @@ Deploy a process (user must be admin or belonging to group Process::RESTO_PROCES
     
 Replace a process (user must be admin or belonging to group Process::RESTO_PROCESS_ADMIN_ID)
 
-    curl -v -X PUT -d@data/echoProcess.json "http://admin:admin@localhost:5252/oapi-p/processes"
+    curl -v -X PUT -d@data/echoProcess.json "http://admin:admin@localhost:5252/oapi-p/processes/EchoProcess"
 
 Get a process
 
