@@ -1149,7 +1149,10 @@ class Process extends RestoAddOn
         $this->validateInputs($body['inputs'], $process['inputs'] ?? array());
 
         $jobId = RestoUtil::toUUID(md5(microtime() . rand()));
-        $container = $this->launchContainer($jobId, $process['executionUnit']);
+        $container = $this->launchContainer($jobId, $process['executionUnit'], array(
+            'inputs' => $body['inputs'] ?? array(),
+            'outputs' => $body['outputs'] ?? array()
+        ));
 
         try {
             
@@ -1406,11 +1409,12 @@ class Process extends RestoAddOn
      * 
      * @param $jobId
      * @param $executionUnit
+     * @param $body
      */
-    private function launchContainer($jobId, $executionUnit)
+    private function launchContainer($jobId, $executionUnit, $body)
     {
         
-        // Launch process
+        // Initialize docker connection
         try {
             $remote_socket = $executionUnit['host'] ?? $this->options['executionUnit']['host'] ?? null;
             $processRunner = new ProcessRunner(array(
@@ -1421,8 +1425,13 @@ class Process extends RestoAddOn
             return RestoLogUtil::httpError(500, 'Cannot connect to remote_socket ' . $executionUnit['host'] ?? $this->options['executionUnit']['host'] ?? null);
         }
         
+        // Convert inputs/outputs as Base64 env
+        $env = array(
+            'JSON_INPUT_BASE64' => base64_encode(json_encode($body, JSON_UNESCAPED_SLASHES));
+        );
+
         try {    
-            $container = $processRunner->startContainer($executionUnit['image'], array(), array());
+            $container = $processRunner->startContainer($executionUnit['image'], $env, array('execute'));
         } catch (Exception $e) {
             return RestoLogUtil::httpError(400, $e->getMessage());
         }
