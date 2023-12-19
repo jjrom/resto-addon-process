@@ -35,8 +35,9 @@ CREATE TABLE IF NOT EXISTS __DATABASE_COMMON_SCHEMA__.job (
     finished                TIMESTAMP,
     updated                 TIMESTAMP,
     progress                INTEGER,
-    body                    JSON, -- This is what is post for process execution i.e. inputs and outputs
-    container_id            TEXT
+    body                    JSON,               -- This is what is post for process execution i.e. inputs and outputs
+    container_id            TEXT,
+    token                   TEXT UNIQUE NOT NULL
 );
 
 --

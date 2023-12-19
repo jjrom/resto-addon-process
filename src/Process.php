@@ -872,8 +872,9 @@ class Process extends RestoAddOn
      *  )
      *
      *  @param array $params
+     *  @param boolean $showExtra
      */
-    public function getJob($params)
+    public function getJob($params, $showExtra = false)
     {
 
         try {
@@ -890,7 +891,7 @@ class Process extends RestoAddOn
             return RestoLogUtil::httpError($e->getCode(), $e->getMessage());
         }
 
-        return $this->internalToJob($results[0], false);
+        return $this->internalToJob($results[0], $showExtra);
 
     }
 
@@ -1025,10 +1026,20 @@ class Process extends RestoAddOn
     public function updateJob($params, $body)
     {
 
-        $job = $this->getJob($params);
+        $job = $this->getJob($params, true);
 
-        // Only the owner of the job or the admin can update it
-        if ($job['owner'] !== $this->user->profile['id']) {
+        /*
+         * Authorization check hierarchy is either :
+         *  1. job token passed to the docker container on execution
+         *  or
+         *  2. owner of the job or a user with admin privileges 
+         */
+        if ( isset($params['token']) ) {
+            if ( $params['token'] !== $job['token'] ) {
+                return RestoLogUtil::httpError(403);
+            }
+        }
+        else if ($job['owner'] !== $this->user->profile['id']) {
             if ( !$this->user->hasGroup(RestoConstants::GROUP_ADMIN_ID) && !$this->user->hasGroup(Process::GROUP_PROCESS_ADMIN_ID)) {
                 return RestoLogUtil::httpError(403);
             }
@@ -1149,21 +1160,31 @@ class Process extends RestoAddOn
         $this->validateInputs($body['inputs'], $process['inputs'] ?? array());
 
         $jobId = RestoUtil::toUUID(md5(microtime() . rand()));
-        $container = $this->launchContainer($jobId, $process['executionUnit'], array(
+
+        /*
+         * Authorization token associated with the job and passed to the executionUnit.
+         * The duration has no impact since it is not used for validation afterward
+         */
+        $token = $this->context->createJWT($jobId, 86400, array(
+            'callback' => $this->context->core['baseUrl'] . $this->landingRoot . '/jobs/' . $jobId
+        ));
+
+        $container = $this->launchContainer($process['executionUnit'], $token, array(
             'inputs' => $body['inputs'] ?? array(),
             'outputs' => $body['outputs'] ?? array()
         ));
 
         try {
             
-            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('INSERT INTO ' . $this->context->dbDriver->commonSchema . '.job (id, userid, process_id, status, created, started, updated, progress, body, container_id) VALUES ($1, $2, $3, $4, now(), now(), now(), $5, $6, $7) RETURNING ' . $this->jobColumns, array(
+            $results = $this->context->dbDriver->fetch($this->context->dbDriver->pQuery('INSERT INTO ' . $this->context->dbDriver->commonSchema . '.job (id, userid, process_id, status, created, started, updated, progress, body, container_id, token) VALUES ($1, $2, $3, $4, now(), now(), now(), $5, $6, $7, $8) RETURNING ' . $this->jobColumns, array(
                 $jobId,
                 $this->user->profile['id'],
                 $params['processId'],
                 'accepted',
                 0,
                 json_encode($body, JSON_UNESCAPED_SLASHES),
-                $container['containerId']
+                $container['containerId'],
+                $token
             )));
 
             if (count($results) !== 1) {
@@ -1303,10 +1324,10 @@ class Process extends RestoAddOn
      * Convert raw job from database to an OGC API Job
      *
      * @param array $internalJob
-     * @param boolean $showBody -- Set to true only internaly to get the inputs/outputs info and the container_id
+     * @param boolean $showExtra -- Set to true only internaly to display extras information
      *
      */
-    private function internalToJob($internalJob, $showBody)
+    private function internalToJob($internalJob, $showExtra)
     {
 
         $links = array(
@@ -1347,9 +1368,10 @@ class Process extends RestoAddOn
             'links' => $links
         );
 
-        if ($showBody) {
+        if ($showExtra) {
             $job['body'] = json_decode($internalJob['body'], true);
             $job['container_id'] = $internalJob['container_id'];
+            $job['token'] = $internalJob['token'];
         }
 
         return $job;
@@ -1407,11 +1429,11 @@ class Process extends RestoAddOn
     /**
      * Launch container on remote socket
      * 
-     * @param $jobId
      * @param $executionUnit
+     * @param $token
      * @param $body
      */
-    private function launchContainer($jobId, $executionUnit, $body)
+    private function launchContainer($executionUnit, $token, $body)
     {
         
         // Initialize docker connection
@@ -1427,11 +1449,12 @@ class Process extends RestoAddOn
         
         // Convert inputs/outputs as Base64 env
         $env = array(
-            'JSON_INPUT_BASE64' => base64_encode(json_encode($body, JSON_UNESCAPED_SLASHES))
+            'JOB_AUTH_TOKEN=' . $token,
+            'JSON_INPUT_BASE64='. base64_encode(json_encode($body, JSON_UNESCAPED_SLASHES))
         );
 
         try {    
-            $container = $processRunner->startContainer($executionUnit['image'], $env, array('execute'));
+            $container = $processRunner->startContainer($executionUnit['image'], $env, $executionUnit['cmd'] ?? array('execute'));
         } catch (Exception $e) {
             return RestoLogUtil::httpError(400, $e->getMessage());
         }
