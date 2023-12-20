@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS __DATABASE_COMMON_SCHEMA__.job (
     progress                INTEGER,
     body                    JSON,               -- This is what is post for process execution i.e. inputs and outputs
     container_id            TEXT,
-    token                   TEXT UNIQUE NOT NULL
+    token                   TEXT UNIQUE NOT NULL,
+    result                  JSON
 );
 
 --

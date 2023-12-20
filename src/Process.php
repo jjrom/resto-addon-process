@@ -185,7 +185,7 @@ class Process extends RestoAddOn
     /*
      * List of job/process columns to retrieve in the SQL query
      */
-    private $jobColumns = 'id, userid as owner, process_id, type, status, message, to_iso8601(created) as created, to_iso8601(started) as started, to_iso8601(finished) as finished, to_iso8601(updated) as updated, progress, body, container_id';
+    private $jobColumns = 'id, userid as owner, process_id, type, status, message, to_iso8601(created) as created, to_iso8601(started) as started, to_iso8601(finished) as finished, to_iso8601(updated) as updated, progress, body, container_id, token, result';
     private $processColumns = 'id, userid as owner, title, description, version, keywords, to_iso8601(created) as created, to_iso8601(updated) as updated, content, execution_unit';
     
     /**
@@ -1073,6 +1073,10 @@ class Process extends RestoAddOn
                 return RestoLogUtil::httpError(400, 'Invalid progress value - should be between 0 and 100');
             }
         } 
+        
+        if ( isset($body['result']) ) {
+            $update[] = 'result=\'' . pg_escape_string($this->context->dbDriver->getConnection(), json_encode($body['result']), JSON_UNESCAPED_SLASHES) . '\'';
+        }
 
         try {
             $results = $this->context->dbDriver->fetch($this->context->dbDriver->query('UPDATE ' . $this->context->dbDriver->commonSchema . '.job SET ' . join(',', $update) . ' WHERE id=\'' . pg_escape_string($this->context->dbDriver->getConnection(), $job['jobID']) . '\' RETURNING ' . $this->jobColumns));
@@ -1164,9 +1168,12 @@ class Process extends RestoAddOn
         /*
          * Authorization token associated with the job and passed to the executionUnit.
          * The duration has no impact since it is not used for validation afterward
+         * 
+         * [IMPORTANT] Systematically replace localhost with host.docker.internal to allow container to effectively
+         * reach resto endpoint back
          */
         $token = $this->context->createJWT($jobId, 86400, array(
-            'callback' => $this->context->core['baseUrl'] . $this->landingRoot . '/jobs/' . $jobId
+            'callback' => str_replace('//localhost', '//host.docker.internal', $this->context->core['baseUrl']) . $this->landingRoot . '/jobs/' . $jobId
         ));
 
         $container = $this->launchContainer($process['executionUnit'], $token, array(
@@ -1207,9 +1214,16 @@ class Process extends RestoAddOn
      */
     public function getResults($params)
     {
-        return array(
-            'message' => 'TODO'
-        );
+        
+        $job = $this->getJob($params, true);
+        
+        // No result yet
+        if ( ! in_array($job['status'], array('successful', 'failed')) ) {
+            return RestoLogUtil::httpError(404);
+        }
+
+        return $job['result'];
+
     }
 
     /**
@@ -1372,6 +1386,7 @@ class Process extends RestoAddOn
             $job['body'] = json_decode($internalJob['body'], true);
             $job['container_id'] = $internalJob['container_id'];
             $job['token'] = $internalJob['token'];
+            $job['result'] = json_decode($internalJob['result'], true);
         }
 
         return $job;
