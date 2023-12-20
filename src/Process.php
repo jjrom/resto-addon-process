@@ -1075,7 +1075,7 @@ class Process extends RestoAddOn
         } 
         
         if ( isset($body['result']) ) {
-            $update[] = 'result=\'' . pg_escape_string($this->context->dbDriver->getConnection(), json_encode($body['result']), JSON_UNESCAPED_SLASHES) . '\'';
+            $update[] = 'result=\'' . pg_escape_string($this->context->dbDriver->getConnection(), json_encode($body['result'], JSON_UNESCAPED_SLASHES)) . '\'';
         }
 
         try {
