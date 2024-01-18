@@ -114,31 +114,16 @@
                 "minOccurs": 2,
                 "maxOccurs": 5,
                 "schema": {
-                    "oneOf": [
-                        {
-                            "type": "string",
-                            "contentMediaType": "application/gml+xml; version=3.2",
-                            "contentSchema": "http://schemas.opengis.net/gml/3.2.1/geometryBasic2d.xsd"
-                        },
-                        {
-                            "allOf": [
-                                {
-                                    "format": "geojson-geometry"
-                                }
-                            ]
-                        }
-                    ]
+                    "type": "string",
+                    "format": "geojson-geometry"
                 }
             },
             "boundingBoxInput": {
                 "title": "Bounding Box Input Example",
                 "description": "This is an example of a BBOX literal input.",
                 "schema": {
-                    "allOf": [
-                        {
-                            "format": "ogc-bbox"
-                        }
-                    ]
+                    "type": "string",
+                    "format": "ogc-bbox"
                 }
             },
             "imagesInput": {
@@ -164,25 +149,14 @@
                             }
                         }
                     }
-                    
                 }
             },
             "featureCollectionInput": {
                 "title": "Feature Collection Input Example.",
                 "description": "This is an example of an input that is a feature collection that can be encoded in one of three ways: as a GeoJSON feature collection, as a GML feature collection retrieved from a WFS or as a KML document.",
                 "schema": {
-                    "oneOf": [
-                        {
-                            "allOf": [
-                                {
-                                    "format": "geojson-feature-collection"
-                                },
-                                {
-                                    "$ref": "https://geojson.org/schema/FeatureCollection.json"
-                                }
-                            ]
-                        }
-                    ]
+                    "type": "string",
+                    "format": "geojson-feature-collection"
                 }
             }
         },
@@ -274,76 +248,30 @@
             },
             "geometryOutput": {
                 "schema": {
-                    "oneOf": [
-                        {
-                            "type": "string",
-                            "contentMediaType": "application/gml+xml",
-                            "contentSchema": "http://schemas.opengis.net/gml/3.2.1/geometryBasic2d.xsd"
-                        },
-                        {
-                            "allOf": [
-                                {
-                                    "format": "geojson-geometry"
-                                },
-                                {
-                                    "$ref": "http://schemas.opengis.net/ogcapi/features/part1/1.0/openapi/schemas/geometryGeoJSON.yaml"
-                                }
-                            ]
-                        }
-                    ]
+                    "type": "string",
+                    "format": "geojson-geometry",
+                    "$ref": "http://schemas.opengis.net/ogcapi/features/part1/1.0/openapi/schemas/geometryGeoJSON.yaml"
                 }
             },
             "boundingBoxOutput": {
                 "schema": {
-                    "allOf": [
-                        {
-                            "format": "ogc-bbox"
-                        },
-                        {
-                            "$ref": "https://raw.githubusercontent.com/opengeospatial/ogcapi-processes/fa84750b0c633af5db0ec122882fb77efe558ed0/openapi/schemas/processes-core/bbox.yaml"
-                        }
-                    ]
+                    "type": "string",
+                    "format": "ogc-bbox",
+                    "$ref": "https://raw.githubusercontent.com/opengeospatial/ogcapi-processes/fa84750b0c633af5db0ec122882fb77efe558ed0/openapi/schemas/processes-core/bbox.yaml"
                 }
             },
             "imagesOutput": {
                 "schema": {
-                    "oneOf": [
-                        {
-                            "type": "string",
-                            "contentEncoding": "binary",
-                            "contentMediaType": "image/tiff; application=geotiff"
-                        },
-                        {
-                            "type": "string",
-                            "contentEncoding": "binary",
-                            "contentMediaType": "image/jp2"
-                        }
-                    ]
+                    "type": "string",
+                    "contentEncoding": "binary",
+                    "contentMediaType": "image/tiff; application=geotiff"
                 }
             },
             "featureCollectionOutput": {
                 "schema": {
-                    "oneOf": [
-                        {
-                            "type": "string",
-                            "contentMediaType": "application/gml+xml; version=3.2"
-                        },
-                        {
-                            "type": "string",
-                            "contentMediaType": "application/vnd.google-earth.kml+xml",
-                            "contentSchema": "https://schemas.opengis.net/kml/2.3/ogckml23.xsd"
-                        },
-                        {
-                            "allOf": [
-                                {
-                                    "format": "geojson-feature-collection"
-                                },
-                                {
-                                    "$ref": "https://geojson.org/schema/FeatureCollection.json"
-                                }
-                            ]
-                        }
-                    ]
+                    "type": "string",
+                    "format": "geojson-feature-collection",
+                    "$ref": "https://geojson.org/schema/FeatureCollection.json"
                 }
             }
         },
@@ -356,8 +284,8 @@
         ]
     },
     "executionUnit": {
-        "type":"docker",
-        "image":"busybox",
-        "host":"tcp://host.docker.internal:2375"
+        "type": "docker",
+        "image": "busybox",
+        "host": "tcp://host.docker.internal:2375"
     }
 }
