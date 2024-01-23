@@ -1173,7 +1173,7 @@ class Process extends RestoAddOn
          * reach resto endpoint back
          */
         $token = $this->context->createJWT($jobId, 86400, array(
-            'callback' => str_replace('//localhost', '//host.docker.internal', $this->context->core['baseUrl']) . $this->landingRoot . '/jobs/' . $jobId
+            'callback' => str_replace(['//localhost', '//127.0.0.1'], '//host.docker.internal', $this->context->core['baseUrl']) . $this->landingRoot . '/jobs/' . $jobId
         ));
 
         $container = $this->launchContainer($process['executionUnit'], $token, array(
