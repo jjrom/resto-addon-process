@@ -1459,7 +1459,7 @@ class Process extends RestoAddOn
                 'ssl' => $executionUnit['ssl'] ?? $this->options['executionUnit']['ssl'] ?? false
             ));
         } catch (Exception $e) {
-            return RestoLogUtil::httpError(500, 'Cannot connect to remote_socket ' . $executionUnit['host'] ?? $this->options['executionUnit']['host'] ?? null);
+            return RestoLogUtil::httpError(500, 'Cannot connect to remote_socket ' . $remote_socket);
         }
         
         // Convert inputs/outputs as Base64 env
