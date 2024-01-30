@@ -28,7 +28,7 @@ class ProcessRunner
     public function __construct($options)
     {
         $client = DockerClientFactory::create([
-            'remote_socket' => $options['dockerHost'] ?? 'tcp://host.docker.internal:1234',
+            'remote_socket' => $options['remote_socket'] ?? 'tcp://host.docker.internal:2375',
             'ssl' => $options['ssl'] ?? false,
         ]);
         
