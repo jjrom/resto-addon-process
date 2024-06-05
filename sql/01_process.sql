@@ -1,42 +1,50 @@
 
 --
--- Entities
+-- Process
 --
 CREATE TABLE IF NOT EXISTS __DATABASE_COMMON_SCHEMA__.process (
-
     -- Unique identifier provided during creation
-    "id"                TEXT PRIMARY KEY,
+    "id"                    TEXT PRIMARY KEY,
+    -- Owner reference resto.user
+    userid                  BIGINT,
+    title                   TEXT,
+    description             TEXT,
+    version                 TEXT,
+    keywords                TEXT[],
+    created                 TIMESTAMP,
+    updated                 TIMESTAMP,
+    content                 JSON,             -- Every properties from OGC API Processes process object
+    execution_unit          JSON
+);
 
-    -- Process status as HTTP Status
-    status              INT DEFAULT 202,
-
-    -- Process title
-    title                TEXT,
-
-    -- Process description
-    description         TEXT,
-
-    -- Reference resto.user
-    userid              BIGINT,
-
-    -- Timestamp of process creation
-    created             TIMESTAMP,
-
-    -- Timestamp of process ending
-    finished            TIMESTAMP,
-
-    -- Process input - can contains any property
-    input               JSON,
-
-    -- Process output
-    output              JSON
-
+--
+-- Job
+--
+CREATE TABLE IF NOT EXISTS __DATABASE_COMMON_SCHEMA__.job (
+    -- Unique identifier provided during creation
+    "id"                    TEXT PRIMARY KEY,
+    -- Owner reference resto.user
+    userid                  BIGINT,
+    -- Reference process id
+    process_id              TEXT REFERENCES __DATABASE_COMMON_SCHEMA__.process (id) ON DELETE CASCADE,
+    type                    TEXT default 'process',
+    status                  TEXT,
+    message                 TEXT,
+    created                 TIMESTAMP,
+    started                 TIMESTAMP,
+    finished                TIMESTAMP,
+    updated                 TIMESTAMP,
+    progress                INTEGER,
+    body                    JSON,               -- This is what is post for process execution i.e. inputs and outputs
+    container_id            TEXT,
+    token                   TEXT UNIQUE NOT NULL,
+    result                  JSON
 );
 
 --
 -- Indexes
 --
-CREATE INDEX IF NOT EXISTS idx_status_process ON __DATABASE_COMMON_SCHEMA__.process (status);
-
+CREATE INDEX IF NOT EXISTS idx_status_job ON __DATABASE_COMMON_SCHEMA__.job (status);
+CREATE INDEX IF NOT EXISTS idx_userid_job ON __DATABASE_COMMON_SCHEMA__.job (userid);
 
 

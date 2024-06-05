@@ -1,0 +1,82 @@
+{
+    "name": "beluga-php/docker-php",
+    "license": "MIT",
+    "type": "library",
+    "description": "A Docker PHP client",
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true,
+        "preferred-install": "dist",
+        "allow-plugins": {
+            "php-http/discovery": false
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "autoload": {
+        "psr-4": {
+            "Docker\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Docker\\Tests\\": "tests/"
+        }
+    },
+    "funding": [
+        {
+            "type": "github",
+            "url": "https://github.com/flavioheleno"
+        }
+    ],
+    "require": {
+        "php": ">=8.1",
+        "beluga-php/docker-php-api": "7.1.43.0",
+        "nyholm/psr7": "^1.8",
+        "php-http/client-common": "^2.7",
+        "php-http/discovery": "^1.19",
+        "plesk/socket-client": "^2.1",
+        "psr/http-message": "^2.0",
+        "symfony/filesystem": "^6.3",
+        "symfony/process": "^6.3",
+        "symfony/serializer": "^6.3"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.8",
+        "php-parallel-lint/php-parallel-lint": "^1.2",
+        "phpunit/phpunit": "^9.5",
+        "psy/psysh": "^0.11",
+        "roave/security-advisories": "dev-latest"
+    },
+    "conflict": {
+        "docker-php/docker-php": "*"
+    },
+    "scripts": {
+        "php-cs-fixer": "vendor/bin/php-cs-fixer fix --dry-run --verbose --diff",
+        "php-cs-fixer-fix": "vendor/bin/php-cs-fixer fix --verbose",
+        "console": "vendor/bin/psysh",
+        "lint": "vendor/bin/parallel-lint --exclude vendor .",
+        "phpunit": "vendor/bin/phpunit ./tests/ --coverage-html=./report/coverage/ --whitelist=./src/ --testdox-html=./report/testdox.html --disallow-test-output --process-isolation",
+        "test-ci": "vendor/bin/phpunit ./tests/ --disallow-test-output --process-isolation",
+        "test-coverage": "vendor/bin/phpunit ./tests/ --whitelist=./src/ --coverage-clover=clover.xml",
+        "test": [
+            "@lint",
+            "@phpunit"
+        ]
+    },
+    "scripts-descriptions": {
+        "console": "Runs PsySH Console",
+        "lint": "Runs complete codebase lint testing",
+        "phpunit": "Runs library test suite",
+        "test-ci": "Runs library test suite (for continuous integration)",
+        "test-coverage": "Runs test-coverage analysis",
+        "test": "Runs all tests"
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-master": "1.43.x-dev",
+            "1.42": "1.42.x-dev",
+            "1.41": "1.41.x-dev"
+        }
+    }
+}
